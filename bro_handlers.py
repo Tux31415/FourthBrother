@@ -1,4 +1,4 @@
-# FourthBrother allows to use Telegram Bot API to control you Raspberry Pi
+# FourthBrother allows to use Telegram Bot API to control your Raspberry Pi
 # Copyright (C) 2021 Pablo del Hoyo Abad <pablodelhoyo1314@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -85,5 +85,5 @@ def movement_handler(bro):
 
     # TODO: this is an emergency situation. If, for some reason, we were using the recording, stop it
     bro.using_camera.set()
-    bro.record_and_send_video(MAXIMUM_VIDEO_DURATION)
+    bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
     bro.using_camera.clear()

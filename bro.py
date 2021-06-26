@@ -1,4 +1,4 @@
-# FourthBrother allows to use Telegram Bot API to control you Raspberry Pi
+# FourthBrother allows to use Telegram Bot API to control your Raspberry Pi
 # Copyright (C) 2021 Pablo del Hoyo Abad <pablodelhoyo1314@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
