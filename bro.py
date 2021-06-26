@@ -66,6 +66,8 @@ class FourthBrother:
 
         # I use Event() to ensure atomicity. Moreover, there is not a lof overhead in using it
         self.using_camera = threading.Event()
+        self.pir_activated = False
+        self.last_time_pir = 0
         self.camera_framerate = camera_framerate
 
 
@@ -166,6 +168,7 @@ def main():
     bro.add_command("relay", bro_handlers.relay_command) 
     bro.add_command("foto", bro_handlers.photo_command) 
     bro.add_command("video", bro_handlers.video_command) 
+    bro.add_command("sensor", bro_handlers.sensor_command)
 
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
