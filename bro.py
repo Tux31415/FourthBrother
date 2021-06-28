@@ -62,7 +62,7 @@ class FourthBrother:
         pin_dict, 
         camera_framerate=CAMERA_FRAMERATE,
         camera_resolution=(576, 288),
-        flip=(False, False)
+        rotation=0
     ):
         # telegram api stuff
         self.__updater = Updater(token)
@@ -78,7 +78,7 @@ class FourthBrother:
         self.relay = NegativeLogicRelay(pin_dict["RELAY"])
 
         self.camera = PiCamera(framerate=camera_framerate, resolution=camera_resolution)
-        self.camera.vflip, self.camera.hflip = flip
+        self.camera.rotation = rotation
 
         # I use Event() to ensure atomicity. Moreover, there is not a lof overhead in using it
         self.using_camera = threading.Event()
@@ -179,7 +179,7 @@ class FourthBrother:
 
 def main():
     pin_dict = generate_pin_dict()
-    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict, flip=(True, True))
+    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict, rotation=270)
 
     bro.add_command("relay", bro_handlers.relay_command) 
     bro.add_command("foto", bro_handlers.photo_command) 
