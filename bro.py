@@ -129,7 +129,6 @@ class FourthBrother:
 
         # waits until all threads have finished their tasks before exiting completely
         self.__updater.idle()
-        self.camera.close()
     
     def change_to_normal_mode(self):
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""

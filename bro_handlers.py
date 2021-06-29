@@ -62,7 +62,7 @@ def video_command(bro, update, context):
     
     # we don't want threads to be waiting for the camera to be ready because,
     # during a period of time , we could run out of them if commands of this kind are received
-    # very rapidly and it would be impossible to handle other commands
+    # very rapidly and it would be impossible to handle in time other commands
     if bro.camera_lock.locked():
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
@@ -77,7 +77,14 @@ def movement_handler(bro):
     bro.last_time_pir = time.time()
 
     bro.change_to_manual_mode()
-    # TODO: this is an emergency situation. If, for some reason, we were using the recording, stop it
+
+    # if the camera is being used, wait until it is freed before sending message informing about the sitation
+    # I do it in this way because, if the camera is being used, it is very likely it catches the source which
+    # triggered the pir sensor
+    # NOTE: the aquire() method from Lock() is the one which make the thread to sleep
+    if bro.camera_lock.locked():
+        bro.send_message("La cámara está siendo usada. Esperando a que termine")
+
     bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
 
     bro.change_to_normal_mode()
