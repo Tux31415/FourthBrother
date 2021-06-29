@@ -78,8 +78,8 @@ class FourthBrother:
         self.pir_sensor = MotionSensor(pin_dict["PIR_SENSOR"])
 
         # when this relay is on, the lamp acts as if there were no pir sensor
-        self.relay_ac = NegativeLogicRelay(pin_dict["RELAY_A"])
-        self.relay_pir = NegativeLogicRelay(pin_dict["RELAY_B"])
+        self.relay_normal = NegativeLogicRelay(pin_dict["RELAY_A"])
+        self.relay_manual = NegativeLogicRelay(pin_dict["RELAY_B"])
 
         self.camera = PiCamera(framerate=camera_framerate, resolution=camera_resolution)
         self.camera.rotation = rotation
@@ -135,20 +135,20 @@ class FourthBrother:
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
 
         with self.__switching_mode_lock:
-            self.relay_pir.off()
+            self.relay_manual.off()
             # leave enough time for the relay to switch state. We don't want a shortcircuit
             time.sleep(0.5)
-            self.relay_ac.off()
+            self.relay_normal.off()
             self.is_normal_mode = True
 
     def change_to_manual_mode(self):
         """ Switches the relays in such a way that the lamp activate when the relay is on """
 
         with self.__switching_mode_lock:
-            self.relay_ac.on()
+            self.relay_normal.on()
             # leave enough time for the relay to switch state. We don't want a shortcircuit
             time.sleep(0.5)
-            self.relay_pir.on()
+            self.relay_manual.on()
             self.is_normal_mode = False
 
     def get_image_stream(self):
