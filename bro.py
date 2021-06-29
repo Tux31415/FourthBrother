@@ -71,9 +71,10 @@ class FourthBrother:
         # only one chat is allowed to talk to the bot. This way, bro knows where
         # to send a message when the value of a sensor changes
         self.__authorized_chat = authorized_chat
+
+        # the process of changing mode must be atomic to avoid possible shortcircuits
         self.__switching_mode_lock = threading.Lock()
 
-        # devices 
         self.pir_sensor = MotionSensor(pin_dict["PIR_SENSOR"])
 
         # when this relay is on, the lamp acts as if there were no pir sensor
@@ -83,8 +84,7 @@ class FourthBrother:
         self.camera = PiCamera(framerate=camera_framerate, resolution=camera_resolution)
         self.camera.rotation = rotation
 
-        # I use Event() to ensure atomicity. Moreover, there is not a lof overhead in using it
-        self.using_camera = threading.Event()
+        self.camera_lock = threading.Lock()
         self.pir_activated = False
         self.is_normal_mode = True
         self.last_time_pir = 0
@@ -129,6 +129,7 @@ class FourthBrother:
 
         # waits until all threads have finished their tasks before exiting completely
         self.__updater.idle()
+        self.camera.close()
     
     def change_to_normal_mode(self):
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
@@ -152,21 +153,22 @@ class FourthBrother:
 
     def get_image_stream(self):
         """ Takes a photo and returns a bytes object representing the image """
-
-        stream = BytesIO()
-        self.camera.capture(stream, "png")
-        stream.seek(0)
-        return stream
+        with self.camera_lock:
+            stream = BytesIO()
+            self.camera.capture(stream, "png")
+            stream.seek(0)
+            return stream
 
     def get_video_stream(self, video_duration):
         """ Records a video and returns the byte stream """
+        with self.camera_lock:
+            stream = BytesIO()
+            self.camera.start_recording(stream, format="h264", quality=23)
+            self.camera.wait_recording(video_duration)
+            self.camera.stop_recording()
+            stream.seek(0)
 
-        stream = BytesIO()
-        self.camera.start_recording(stream, format="h264", quality=23)
-        self.camera.wait_recording(video_duration)
-        self.camera.stop_recording()
-        stream.seek(0)
-        return stream
+            return stream
 
     def record_and_send_video(self, duration, inform=True):
         """ Records and sends a video with the specified duration. 

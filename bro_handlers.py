@@ -31,16 +31,12 @@ def relay_command(bro, update, context):
         bro.change_to_normal_mode()
 
 def photo_command(bro, update, context):
-    if bro.using_camera.is_set():
-        bro.send_message("La cámara no se encuentra disponible")
+    if bro.camera_lock.locked():
+        bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
-
-    bro.using_camera.set()
 
     with bro.get_image_stream() as image_stream:
         bro.send_photo(image_stream)
-
-    bro.using_camera.clear()
 
 # TODO: add inline keyboards to choose this
 def sensor_command(bro, update, context):
@@ -52,28 +48,26 @@ def sensor_command(bro, update, context):
         bro.pir_activated = True
 
 def video_command(bro, update, context):
-    if bro.using_camera.is_set():
-        bro.send_message("La cámara no se encuentra disponible")
-        return
-    
-    bro.using_camera.set()
-
     duration = DEFAULT_VIDEO_DURATION
     if context.args:
         try:
             duration = int(context.args[0])
         except ValueError:
             bro.send_message("Por favor, introduce un número")
-            bro.using_camera.clear()
             return
 
     if duration > MAXIMUM_VIDEO_DURATION:
         bro.send_message(f"No puedes hacer grabaciones de más de {MAXIMUM_VIDEO_DURATION} segundos")
-        bro.using_camera.clear()
         return
     
+    # we don't want threads to be waiting for the camera to be ready because,
+    # during a period of time , we could run out of them if commands of this kind are received
+    # very rapidly and it would be impossible to handle other commands
+    if bro.camera_lock.locked():
+        bro.send_message("La cámara no se encuentra disponible en estos momentos")
+        return
+
     bro.record_and_send_video(duration)
-    bro.using_camera.clear()
 
 def movement_handler(bro):
     if not bro.pir_activated or time.time() - bro.last_time_pir < MINIMUM_DELAY_PIR:
@@ -84,8 +78,6 @@ def movement_handler(bro):
 
     bro.change_to_manual_mode()
     # TODO: this is an emergency situation. If, for some reason, we were using the recording, stop it
-    bro.using_camera.set()
     bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
-    bro.using_camera.clear()
 
     bro.change_to_normal_mode()
