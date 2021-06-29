@@ -39,7 +39,7 @@ GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 # It is important that in the .env file, in order to specify
 # the pin associated to each device calling the env variable
 # following the format: '{DEVICE_NAME}_PIN'
-DEVICES_NAMES = ["PIR_SENSOR", "LED", "RELAY"]
+DEVICES_NAMES = ["PIR_SENSOR", "RELAY_A", "RELAY_B"]
 
 CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
 
@@ -71,11 +71,14 @@ class FourthBrother:
         # only one chat is allowed to talk to the bot. This way, bro knows where
         # to send a message when the value of a sensor changes
         self.__authorized_chat = authorized_chat
+        self.__switching_mode_lock = threading.Lock()
 
         # devices 
-        self.led = LED(pin_dict["LED"])
         self.pir_sensor = MotionSensor(pin_dict["PIR_SENSOR"])
-        self.relay = NegativeLogicRelay(pin_dict["RELAY"])
+
+        # when this relay is on, the lamp acts as if there were no pir sensor
+        self.relay_ac = NegativeLogicRelay(pin_dict["RELAY_A"])
+        self.relay_pir = NegativeLogicRelay(pin_dict["RELAY_B"])
 
         self.camera = PiCamera(framerate=camera_framerate, resolution=camera_resolution)
         self.camera.rotation = rotation
@@ -83,8 +86,8 @@ class FourthBrother:
         # I use Event() to ensure atomicity. Moreover, there is not a lof overhead in using it
         self.using_camera = threading.Event()
         self.pir_activated = False
+        self.is_normal_mode = True
         self.last_time_pir = 0
-        self.camera_framerate = camera_framerate
 
 
     def add_handler_to_device(self, attr_device_name, **events):
@@ -127,6 +130,25 @@ class FourthBrother:
         # waits until all threads have finished their tasks before exiting completely
         self.__updater.idle()
     
+    def change_to_normal_mode(self):
+        """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
+
+        with self.__switching_mode_lock:
+            self.relay_pir.off()
+            # leave enough time for the relay to switch state. We don't want a shortcircuit
+            time.sleep(0.5)
+            self.relay_ac.off()
+            self.is_normal_mode = True
+
+    def change_to_manual_mode(self):
+        """ Switches the relays in such a way that the lamp activate when the relay is on """
+
+        with self.__switching_mode_lock:
+            self.relay_ac.on()
+            # leave enough time for the relay to switch state. We don't want a shortcircuit
+            time.sleep(0.5)
+            self.relay_pir.on()
+            self.is_normal_mode = False
 
     def get_image_stream(self):
         """ Takes a photo and returns a bytes object representing the image """
@@ -158,7 +180,7 @@ class FourthBrother:
             if inform:
                 self.send_message("Se ha terminado la grabación. Iniciando procesamiento")
             
-            with bro_utils.convert_to_mp4(video_stream.read(), self.camera_framerate) as mp4_stream:
+            with bro_utils.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
                 self.send_video(mp4_stream)        
 
     def send_message(self, message, *args, **kwargs):
@@ -179,7 +201,8 @@ class FourthBrother:
 
 def main():
     pin_dict = generate_pin_dict()
-    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict, rotation=270)
+    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict,
+                            camera_resolution=(288*2, 576*2), rotation=270)
 
     bro.add_command("relay", bro_handlers.relay_command) 
     bro.add_command("foto", bro_handlers.photo_command) 

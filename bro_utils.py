@@ -31,7 +31,7 @@ def convert_to_mp4(stream, framerate):
     file_name = f"{timestamp}.mp4"
     command = FFMPEG_COMMAND.format(framerate, file_name).split()
 
-    subprocess.run(command, input=stream, stderr=subprocess.DEVNULL)
+    subprocess.run(command, input=stream)
 
     mp4_container_stream = None
 

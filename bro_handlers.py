@@ -17,19 +17,19 @@
 import time
 
 # measured in seconds
-DEFAULT_VIDEO_DURATION = 5 
+DEFAULT_VIDEO_DURATION = 8
 MAXIMUM_VIDEO_DURATION = 30
-MINIMUM_DELAY_PIR = 15
+MINIMUM_DELAY_PIR = 45
 
 
 def relay_command(bro, update, context):
-    if bro.relay.value:
-        bro.send_message("El relé se ha apagado")
-        bro.relay.off()
+    if bro.is_normal_mode:
+        bro.send_message("La lámpara puede ser controlado por el relé")
+        bro.change_to_manual_mode()
     else:
-        bro.send_message("El relé se ha encendido")
-        bro.relay.on()
-        
+        bro.send_message("La lámpara ya no puede ser controlada por el relé")
+        bro.change_to_normal_mode()
+
 def photo_command(bro, update, context):
     if bro.using_camera.is_set():
         bro.send_message("La cámara no se encuentra disponible")
@@ -82,7 +82,10 @@ def movement_handler(bro):
     bro.send_message("¡¡ATENCIÓN: EL SENSOR PIR HA DETECTADO MOVIMIENTO!!")
     bro.last_time_pir = time.time()
 
+    bro.change_to_manual_mode()
     # TODO: this is an emergency situation. If, for some reason, we were using the recording, stop it
     bro.using_camera.set()
     bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
     bro.using_camera.clear()
+
+    bro.change_to_normal_mode()
