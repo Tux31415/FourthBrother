@@ -24,6 +24,7 @@ from picamera import PiCamera
 
 from decouple import config
 from telegram.ext import Updater, CommandHandler
+from telegram.error import NetworkError
 
 import bro_handlers
 import bro_utils
@@ -166,7 +167,6 @@ class FourthBrother:
             self.camera.wait_recording(video_duration)
             self.camera.stop_recording()
             stream.seek(0)
-
             return stream
 
     def record_and_send_video(self, duration, inform=True):
@@ -182,7 +182,7 @@ class FourthBrother:
                 self.send_message("Se ha terminado la grabación. Iniciando procesamiento")
             
             with bro_utils.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
-                self.send_video(mp4_stream)        
+                self._retry_network_error(self.send_video, mp4_stream)
 
     def send_message(self, message, *args, **kwargs):
         """ Sends a message to the chat which is authorized to talk to """
@@ -198,6 +198,17 @@ class FourthBrother:
         """ Sends a video (stream of bytes) to the chat which is authorized to talk to """
 
         self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
+
+    def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
+        """ In case of a NetworkError, retries 'attempts' times before giving up. """
+
+        for i in range(1, attempts + 1):
+            try:
+                sending_func(stream, *args, **kwargs)
+                break
+            except NetworkError:
+                # NOTE: log error in a proper manner (using logging)
+                print(f"NETWORK ERROR: trying again... {i}/{attempts}")
 
 
 def main():
