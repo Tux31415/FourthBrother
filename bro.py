@@ -23,11 +23,13 @@ from gpiozero import LED, MotionSensor
 from picamera import PiCamera
 
 from decouple import config
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import (Updater, CommandHandler, 
+                CallbackQueryHandler, ConversationHandler)
 from telegram.error import NetworkError
 
 import bro_handlers
 import bro_utils
+import menu
 from negative_logic_relay import NegativeLogicRelay
 
 
@@ -41,7 +43,6 @@ GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 # the pin associated to each device calling the env variable
 # following the format: '{DEVICE_NAME}_PIN'
 DEVICES_NAMES = ["PIR_SENSOR", "RELAY_A", "RELAY_B"]
-
 CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
 
 def generate_pin_dict():
@@ -106,20 +107,11 @@ class FourthBrother:
 
     def add_command(self, name, callback, run_async=True):
         """ Registers the callback for a specfied command (messages starting
-            with '/'). The callback is only called if the message comes from 
-            an authorized chat
-            
+            with '/').             
             NOTE: callback receives a reference of the FourthBrother object wich
             registered it """
             
-        def command_wrapper(update, context, *args, **kwargs):
-            if update.message.chat_id == self.__authorized_chat:
-                callback(self, update, context, *args, **kwargs)
-            
-            # TODO: else, register somewhere that someone has tried to 
-            # talk to FourthBrother from an unauthorized chat
-
-        self.__dispatcher.add_handler(CommandHandler(name, command_wrapper, run_async=run_async))
+        self.__dispatcher.add_handler(self._generate_command_handler(name, callback, run_async))
 
     def start_polling(self, timeout=10, courtesy_time=2):
         """ Gets new updates by the long polling method
@@ -198,6 +190,44 @@ class FourthBrother:
         """ Sends a video (stream of bytes) to the chat which is authorized to talk to """
 
         self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
+
+    def _generate_command_handler(self, name, callback, run_async=True):
+        """ Modifies the callback so that it is only called if the message comes from 
+        an authorized chat """
+
+        def command_wrapper(update, context):
+            if update.message.chat_id == self.__authorized_chat:
+                callback(self, update, context)
+            
+            # TODO: else, register somewhere that someone has tried to 
+            # talk to FourthBrother from an unauthorized chat
+
+        return CommandHandler(name, command_wrapper, run_async=run_async)
+
+    def _generate_menu_callback_query_handler(self, regex, callback, run_async=True):
+        """ This method allows to pass an instance of this class as a parameter to a callback query """
+
+        def callback_query_wrapper(update, context):
+            # there is no need to check who has typed because a callback query can only 
+            # be triggered by a command
+            update.query.answer()
+            callback(self, update.query)
+
+        return CallbackQueryHandler(callback_query_wrapper, pattern=regex)
+
+    def add_menu(self, entry_point, states):
+        # FIXME: this is temporal
+        
+        conv_handler = ConversationHandler(
+            entry_points=[self._generate_command_handler("menu", menu.start_menu_command)],
+            states={
+                menu.PIR_ACTIVATION: [self._generate_menu_callback_query_handler(
+                    menu.pir_activation_callback_query, f"^{menu.PIR_ACTIVATION}$")]
+                )
+            }
+            fallbacks=[self._generate_command_handler("menu", menu.start_menu_command)]
+        )
+        self.__dispatcher.add_handler(conv_handler)
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
