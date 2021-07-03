@@ -20,29 +20,41 @@ MAIN_MENU, PIR_ACTIVATION = range(2)
 
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
-            [InlineKeyboardButton(*button_data) for button_data in row_buttons]
+            [InlineKeyboardButton(btn_msg, callback_data=str(data))
+                for btn_msg, data in row_buttons]
             for row_buttons in keyboard
     ]
     return InlineKeyboardMarkup(inline_keyboard)
 
 def start_menu_command(bro, update, context):
+    # TODO: repeated code. Refactor 
     pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, str(PIR_ACTIVATION)]
-    )]
+        [(pir_option_msg, PIR_ACTIVATION)]
+    ])
 
     bro.send_message("Elige una de las siguientes opciones", reply_markup=reply_markup)
 
-    return PIR_ACTIVATION
+def menu_callback_query(bro, query):
+    # TODO: repeated code. Refactor
+    pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
+
+    reply_markup = _generate_keyboard_markup([
+        [(pir_option_msg, PIR_ACTIVATION)]
+    ])
+
+    query.edit_message_text("Elige una de las siguientes opciones", reply_markup=reply_markup)
 
 
 def pir_activation_callback_query(bro, query):
+    reply_markup = _generate_keyboard_markup([
+        [("Volver al menú", MAIN_MENU)]
+    ])
+
     if bro.pir_activated:
         bro.pir_activated = False
-        query.edit_message("El sensor PIR se ha desactivado")
+        query.edit_message_text("El sensor PIR se ha desactivado", reply_markup=reply_markup)
     else:
         bro.pir_activated = True
-        query.edit_message("El sensor PIR se ha desactivado")
-
-    return MAIN_MENU
+        query.edit_message_text("El sensor PIR se ha activado", reply_markup=reply_markup)

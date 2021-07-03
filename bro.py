@@ -110,8 +110,15 @@ class FourthBrother:
             with '/').             
             NOTE: callback receives a reference of the FourthBrother object wich
             registered it """
+
+        def command_wrapper(update, context):
+            if update.message.chat_id == self.__authorized_chat:
+                callback(self, update, context)
             
-        self.__dispatcher.add_handler(self._generate_command_handler(name, callback, run_async))
+            # TODO: else, register somewhere that someone has tried to
+            # talk to FourthBrother from an unauthorized chat
+
+        self.__dispatcher.add_handler(CommandHandler(name, command_wrapper, run_async=run_async))
 
     def start_polling(self, timeout=10, courtesy_time=2):
         """ Gets new updates by the long polling method
@@ -191,43 +198,20 @@ class FourthBrother:
 
         self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
 
-    def _generate_command_handler(self, name, callback, run_async=True):
-        """ Modifies the callback so that it is only called if the message comes from 
-        an authorized chat """
 
-        def command_wrapper(update, context):
-            if update.message.chat_id == self.__authorized_chat:
-                callback(self, update, context)
+    def add_menu_callback_query(self, callback_data, callback, run_async=True):
+        """ Adds a callback query triggered when a button from an inline keyboard is pressed
+            and the data associated to it matches the regex """
             
-            # TODO: else, register somewhere that someone has tried to 
-            # talk to FourthBrother from an unauthorized chat
-
-        return CommandHandler(name, command_wrapper, run_async=run_async)
-
-    def _generate_menu_callback_query_handler(self, regex, callback, run_async=True):
-        """ This method allows to pass an instance of this class as a parameter to a callback query """
-
         def callback_query_wrapper(update, context):
             # there is no need to check who has typed because a callback query can only 
             # be triggered by a command
-            update.query.answer()
-            callback(self, update.query)
+            query = update.callback_query
+            query.answer()
+            callback(self, query)
 
-        return CallbackQueryHandler(callback_query_wrapper, pattern=regex)
-
-    def add_menu(self, entry_point, states):
-        # FIXME: this is temporal
-        
-        conv_handler = ConversationHandler(
-            entry_points=[self._generate_command_handler("menu", menu.start_menu_command)],
-            states={
-                menu.PIR_ACTIVATION: [self._generate_menu_callback_query_handler(
-                    menu.pir_activation_callback_query, f"^{menu.PIR_ACTIVATION}$")]
-                )
-            }
-            fallbacks=[self._generate_command_handler("menu", menu.start_menu_command)]
-        )
-        self.__dispatcher.add_handler(conv_handler)
+        self.__dispatcher.add_handler(CallbackQueryHandler(callback_query_wrapper,
+                                        pattern=f"^{callback_data}$"))
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -246,10 +230,16 @@ def main():
     bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict,
                             camera_resolution=(288*2, 576*2), rotation=270)
 
+    # add commands
     bro.add_command("relay", bro_handlers.relay_command) 
     bro.add_command("foto", bro_handlers.photo_command) 
     bro.add_command("video", bro_handlers.video_command) 
     bro.add_command("sensor", bro_handlers.sensor_command)
+
+    # add menu
+    bro.add_command("menu", menu.start_menu_command)
+    bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
+    bro.add_menu_callback_query(menu.MAIN_MENU, menu.menu_callback_query)
 
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
