@@ -16,7 +16,11 @@
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-MAIN_MENU, PIR_ACTIVATION = range(2)
+import bro_handlers
+
+MESSAGE = "Elige una de las siguientes opciones"
+
+MAIN_MENU, PIR_ACTIVATION, PHOTO = range(3)
 
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
@@ -26,28 +30,27 @@ def _generate_keyboard_markup(keyboard):
     ]
     return InlineKeyboardMarkup(inline_keyboard)
 
-def start_menu_command(bro, update, context):
-    # TODO: repeated code. Refactor 
+def generate_menu_keyboard(bro):
     pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, PIR_ACTIVATION)]
+        [(pir_option_msg, PIR_ACTIVATION)],
+        [("Hacer Foto", PHOTO)]
     ])
 
-    bro.send_message("Elige una de las siguientes opciones", reply_markup=reply_markup)
+    return reply_markup
 
-def menu_callback_query(bro, query):
-    # TODO: repeated code. Refactor
-    pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
+def start_menu_command(bro, update, *comm_args):
+    bro.send_menu()
 
-    reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, PIR_ACTIVATION)]
-    ])
+def menu_callback_query(bro, query, update):
+    query.edit_message_text(MESSAGE, reply_markup=generate_menu_keyboard(bro))
 
-    query.edit_message_text("Elige una de las siguientes opciones", reply_markup=reply_markup)
+def photo_callback_query(bro, query, update):
+    bro_handlers.photo_command(bro, update)
+    bro.send_menu()
 
-
-def pir_activation_callback_query(bro, query):
+def pir_activation_callback_query(bro, query, update):
     reply_markup = _generate_keyboard_markup([
         [("Volver al menú", MAIN_MENU)]
     ])

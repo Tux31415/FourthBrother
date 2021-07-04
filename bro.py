@@ -77,6 +77,8 @@ class FourthBrother:
         # the process of changing mode must be atomic to avoid possible shortcircuits
         self.__switching_mode_lock = threading.Lock()
 
+        self._menu_message = None
+
         self.pir_sensor = MotionSensor(pin_dict["PIR_SENSOR"])
 
         # when this relay is on, the lamp acts as if there were no pir sensor
@@ -113,7 +115,8 @@ class FourthBrother:
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
-                callback(self, update, context)
+                callback(self, update, context.args)
+                self.send_menu()
             
             # TODO: else, register somewhere that someone has tried to
             # talk to FourthBrother from an unauthorized chat
@@ -168,6 +171,16 @@ class FourthBrother:
             stream.seek(0)
             return stream
 
+    def send_menu(self):
+        """ Sends a message with an inline keyboard representing the menu. If the menu
+        is sent again, the message containing the previous menu is deleted"""
+
+        if self._menu_message:
+            self._menu_message.delete()
+
+        reply_markup = menu.generate_menu_keyboard(self)
+        self._menu_message = self.send_message(menu.MESSAGE, reply_markup=reply_markup)
+
     def record_and_send_video(self, duration, inform=True):
         """ Records and sends a video with the specified duration. 
         If inform is True then telegram messages will be sent telling the stage of the 
@@ -186,18 +199,17 @@ class FourthBrother:
     def send_message(self, message, *args, **kwargs):
         """ Sends a message to the chat which is authorized to talk to """
 
-        self.__updater.bot.send_message(self.__authorized_chat, message, *args, **kwargs)
+        return self.__updater.bot.send_message(self.__authorized_chat, message, *args, **kwargs)
     
     def send_photo(self, photo, *args, **kwargs):
         """ Sends a photo (stream of bytes) to the chat which is authorized to talk to """
 
-        self.__updater.bot.send_photo(self.__authorized_chat, photo, *args, **kwargs)
+        return self.__updater.bot.send_photo(self.__authorized_chat, photo, *args, **kwargs)
 
     def send_video(self, video, *args, **kwargs):
         """ Sends a video (stream of bytes) to the chat which is authorized to talk to """
 
-        self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
-
+        return self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
 
     def add_menu_callback_query(self, callback_data, callback, run_async=True):
         """ Adds a callback query triggered when a button from an inline keyboard is pressed
@@ -208,7 +220,7 @@ class FourthBrother:
             # be triggered by a command
             query = update.callback_query
             query.answer()
-            callback(self, query)
+            callback(self, query, update)
 
         self.__dispatcher.add_handler(CallbackQueryHandler(callback_query_wrapper,
                                         pattern=f"^{callback_data}$"))
@@ -238,8 +250,9 @@ def main():
 
     # add menu
     bro.add_command("menu", menu.start_menu_command)
-    bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
     bro.add_menu_callback_query(menu.MAIN_MENU, menu.menu_callback_query)
+    bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
+    bro.add_menu_callback_query(menu.PHOTO, menu.photo_callback_query)
 
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 

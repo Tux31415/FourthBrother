@@ -22,7 +22,7 @@ MAXIMUM_VIDEO_DURATION = 30
 MINIMUM_DELAY_PIR = 45
 
 
-def relay_command(bro, update, context):
+def relay_command(bro, update, *comm_args):
     if bro.is_normal_mode:
         bro.send_message("La lámpara puede ser controlado por el relé")
         bro.change_to_manual_mode()
@@ -30,7 +30,7 @@ def relay_command(bro, update, context):
         bro.send_message("La lámpara ya no puede ser controlada por el relé")
         bro.change_to_normal_mode()
 
-def photo_command(bro, update, context):
+def photo_command(bro, update, *comm_args):
     if bro.camera_lock.locked():
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
@@ -38,8 +38,7 @@ def photo_command(bro, update, context):
     with bro.get_image_stream() as image_stream:
         bro.send_photo(image_stream)
 
-# TODO: add inline keyboards to choose this
-def sensor_command(bro, update, context):
+def sensor_command(bro, update, *comm_args):
     if bro.pir_activated:
         bro.send_message("El sensor pir se ha desactivado")
         bro.pir_activated = False
@@ -47,11 +46,11 @@ def sensor_command(bro, update, context):
         bro.send_message("El sensor pir se ha activado")
         bro.pir_activated = True
 
-def video_command(bro, update, context):
+def video_command(bro, update, *comm_args):
     duration = DEFAULT_VIDEO_DURATION
-    if context.args:
+    if comm_args:
         try:
-            duration = int(context.args[0])
+            duration = int(comm_args[0])
         except ValueError:
             bro.send_message("Por favor, introduce un número")
             return
@@ -88,3 +87,4 @@ def movement_handler(bro):
     bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
 
     bro.change_to_normal_mode()
+    bro.send_menu()
