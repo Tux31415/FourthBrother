@@ -44,6 +44,7 @@ GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 # following the format: '{DEVICE_NAME}_PIN'
 DEVICES_NAMES = ["PIR_SENSOR", "RELAY_A", "RELAY_B"]
 CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
+DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
 
 def generate_pin_dict():
     """ Returns a dict where the key is the device name
@@ -139,7 +140,7 @@ class FourthBrother:
         with self.__switching_mode_lock:
             self.relay_manual.off()
             # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(0.5)
+            time.sleep(DELAY_RELAYS)
             self.relay_normal.off()
             self.is_normal_mode = True
 
@@ -149,7 +150,7 @@ class FourthBrother:
         with self.__switching_mode_lock:
             self.relay_normal.on()
             # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(0.5)
+            time.sleep(DELAY_RELAYS)
             self.relay_manual.on()
             self.is_normal_mode = False
 
