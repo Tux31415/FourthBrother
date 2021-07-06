@@ -91,6 +91,10 @@ class FourthBrother:
 
         self.camera_lock = threading.Lock()
         self.pir_activated = False
+
+        # If this is true, then the lamp will be on for an specified amount of time when the pir sensor
+        # detects movement
+        self.movement_activated = False
         self.is_normal_mode = True
         self.last_time_pir = 0
 

@@ -20,7 +20,7 @@ import bro_handlers
 
 MESSAGE = "Elige una de las siguientes opciones"
 
-MAIN_MENU, PIR_ACTIVATION, PHOTO = range(3)
+PIR_ACTIVATION, PHOTO, LAMP, MOVEMENT = range(4)
 
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
@@ -32,10 +32,12 @@ def _generate_keyboard_markup(keyboard):
 
 def generate_menu_keyboard(bro):
     pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
+    lamp_option_msg = "Encender lámpara" if bro.is_normal_mode else "Apagar lámpara"
+    movement_option_msg = "Desactivar movimiento" if bro.movement_activated else "Activar movimiento"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, PIR_ACTIVATION)],
-        [("Hacer Foto", PHOTO)]
+        [(pir_option_msg, PIR_ACTIVATION), (lamp_option_msg, LAMP)],
+        [("Hacer Foto", PHOTO), (movement_option_msg, MOVEMENT)],
     ])
 
     return reply_markup
@@ -43,11 +45,20 @@ def generate_menu_keyboard(bro):
 def start_menu_command(bro, update, *comm_args):
     bro.send_menu()
 
+# TODO: think on how to avoid redundancy in code between callback queries and commands.
+# The code to be executed is very similar and in case I wanted to change part of its
+# functionalites I would have to change on both sides
 def photo_callback_query(bro, query, update):
     sender = update.effective_user.first_name
     query.edit_message_text(f"{sender} ha hecho una foto")
 
     bro_handlers.photo_command(bro, update)
+
+def lamp_callback_query(bro, query, update):
+    pass
+
+def movement_callback_query(bro, query, update):
+    pass
 
 def pir_activation_callback_query(bro, query, update):
     sender = update.effective_user.first_name
@@ -57,5 +68,5 @@ def pir_activation_callback_query(bro, query, update):
         query.edit_message_text(f"{sender} ha desactivado el sensor PIR")
     else:
         bro.pir_activated = True
-        query.edit_message_text("{sender} ha activado el sensor PIR")
+        query.edit_message_text(f"{sender} ha activado el sensor PIR")
 
