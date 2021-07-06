@@ -108,16 +108,18 @@ class FourthBrother:
 
             setattr(device, event_name, lambda: event_handler(self))
 
-    def add_command(self, name, callback, run_async=True):
+    def add_command(self, name, callback, run_async=True, end_menu=True):
         """ Registers the callback for a specfied command (messages starting
-            with '/').             
+            with '/') If 'end_menu' is true, then the menu will be sent after
+            the callback associated with this handler has ended.
             NOTE: callback receives a reference of the FourthBrother object wich
             registered it """
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
                 callback(self, update, context.args)
-                self.send_menu()
+                if end_menu:
+                    self.send_menu()
             
             # TODO: else, register somewhere that someone has tried to
             # talk to FourthBrother from an unauthorized chat
@@ -173,8 +175,7 @@ class FourthBrother:
             return stream
 
     def send_menu(self):
-        """ Sends a message with an inline keyboard representing the menu. If the menu
-        is sent again, the message containing the previous menu is deleted"""
+        """ Sends a message with an inline keyboard representing the menu """
 
         if self._menu_message:
             self._menu_message.delete()
@@ -212,19 +213,29 @@ class FourthBrother:
 
         return self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
 
-    def add_menu_callback_query(self, callback_data, callback, run_async=True):
+    def add_menu_callback_query(self, callback_data, callback, end_menu=True, run_async=True):
         """ Adds a callback query triggered when a button from an inline keyboard is pressed
-            and the data associated to it matches the regex """
+            and the data associated to it matches the regex. The rule I have established is
+            that the menu will become a normal message after an inline button has been pressed
+            so that a sort of register with the actions of the users is kept in the chat
+
+            If 'end_menu' is True, then the menu message will be sent after the callback has
+            finished"""
             
         def callback_query_wrapper(update, context):
             # there is no need to check who has typed because a callback query can only 
             # be triggered by a command
             query = update.callback_query
             query.answer()
+
+            # the menu will become a normal message, which we don't want to delete
+            self._menu_message = None
             callback(self, query, update)
+            if end_menu:
+                self.send_menu()
 
         self.__dispatcher.add_handler(CallbackQueryHandler(callback_query_wrapper,
-                                        pattern=f"^{callback_data}$"))
+                                        pattern=f"^{callback_data}$", run_async=run_async))
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -250,8 +261,7 @@ def main():
     bro.add_command("sensor", bro_handlers.sensor_command)
 
     # add menu
-    bro.add_command("menu", menu.start_menu_command)
-    bro.add_menu_callback_query(menu.MAIN_MENU, menu.menu_callback_query)
+    bro.add_command("menu", menu.start_menu_command, end_menu=False)
     bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
     bro.add_menu_callback_query(menu.PHOTO, menu.photo_callback_query)
 

@@ -34,9 +34,13 @@ def photo_command(bro, update, *comm_args):
     if bro.camera_lock.locked():
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
+    
+    bro.change_to_manual_mode()
 
     with bro.get_image_stream() as image_stream:
         bro.send_photo(image_stream)
+
+    bro.change_to_normal_mode()
 
 def sensor_command(bro, update, *comm_args):
     if bro.pir_activated:

@@ -43,21 +43,19 @@ def generate_menu_keyboard(bro):
 def start_menu_command(bro, update, *comm_args):
     bro.send_menu()
 
-def menu_callback_query(bro, query, update):
-    query.edit_message_text(MESSAGE, reply_markup=generate_menu_keyboard(bro))
-
 def photo_callback_query(bro, query, update):
+    sender = update.effective_user.first_name
+    query.edit_message_text(f"{sender} ha hecho una foto")
+
     bro_handlers.photo_command(bro, update)
-    bro.send_menu()
 
 def pir_activation_callback_query(bro, query, update):
-    reply_markup = _generate_keyboard_markup([
-        [("Volver al menú", MAIN_MENU)]
-    ])
+    sender = update.effective_user.first_name
 
     if bro.pir_activated:
         bro.pir_activated = False
-        query.edit_message_text("El sensor PIR se ha desactivado", reply_markup=reply_markup)
+        query.edit_message_text(f"{sender} ha desactivado el sensor PIR")
     else:
         bro.pir_activated = True
-        query.edit_message_text("El sensor PIR se ha activado", reply_markup=reply_markup)
+        query.edit_message_text("{sender} ha activado el sensor PIR")
+
