@@ -105,7 +105,7 @@ def movement_handler(bro):
 
     bro.change_to_manual_mode()
 
-    bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
+    bro.record_and_send_video(constants.DEFAULT_VIDEO_DURATION)
 
     bro.change_to_normal_mode()
     bro.send_menu()
