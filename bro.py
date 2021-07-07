@@ -164,6 +164,7 @@ class FourthBrother:
 
     def get_image_stream(self):
         """ Takes a photo and returns a bytes object representing the image """
+
         with self.camera_lock:
             stream = BytesIO()
             self.camera.capture(stream, "png")
@@ -172,6 +173,7 @@ class FourthBrother:
 
     def get_video_stream(self, video_duration):
         """ Records a video and returns the byte stream """
+
         with self.camera_lock:
             stream = BytesIO()
             self.camera.start_recording(stream, format="h264", quality=23)
@@ -234,14 +236,21 @@ class FourthBrother:
             query = update.callback_query
             query.answer()
 
-            # the menu will become a normal message, which we don't want to delete
-            self._menu_message = None
-            callback(self, query, update)
+            callback(self, update)
             if end_menu:
                 self.send_menu()
 
         self.__dispatcher.add_handler(CallbackQueryHandler(callback_query_wrapper,
                                         pattern=f"^{callback_data}$", run_async=run_async))
+
+    def add_button_and_command(self, name, callback, *args, **kwargs):
+        """ Pressing a button is like executing a command but without typing it. This method
+            avoids redundancy when adding these kinds of callbacks
+
+            NOTE: the name of the command and the data associated to a button is the same"""
+
+        self.add_command(name, callback, *args, **kwargs)
+        self.add_menu_callback_query(name, callback, *args, **kwargs)
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -261,17 +270,15 @@ def main():
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
-    bro.add_command("relay", bro_handlers.relay_command) 
-    bro.add_command("foto", bro_handlers.photo_command) 
-    bro.add_command("video", bro_handlers.video_command) 
-    bro.add_command("sensor", bro_handlers.sensor_command)
+    bro.add_button_and_command(bro_handlers.VIDEO, bro_handlers.video_command)
+    bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
+    bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
+    bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
-    bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
-    bro.add_menu_callback_query(menu.PHOTO, menu.photo_callback_query)
-    bro.add_menu_callback_query(menu.VIDEO, menu.video_callback_query)
 
+    # add handlers associated to sensors
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
     bro.start_polling(timeout=15)

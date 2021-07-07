@@ -21,16 +21,26 @@ DEFAULT_VIDEO_DURATION = 8
 MAXIMUM_VIDEO_DURATION = 30
 MINIMUM_DELAY_PIR = 45
 
+PHOTO = "foto"
+LAMP = "lamp"
+MOVEMENT = "movimiento"
+VIDEO = "video"
+ALARM = "alarma"
 
-def relay_command(bro, update, *comm_args):
+def lamp_command(bro, update, *com_args):
+    sender = update.effective_user.first_name
+
     if bro.is_normal_mode:
-        bro.send_message("La lámpara puede ser controlado por el relé")
+        bro.send_message(f"{sender} ha encendido la lámpara")
         bro.change_to_manual_mode()
     else:
-        bro.send_message("La lámpara ya no puede ser controlada por el relé")
+        bro.send_message(f"{sender} ha apagado la lámpara")
         bro.change_to_normal_mode()
 
 def photo_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+    bro.send_message(f"{sender} ha hecho una foto")
+
     if bro.camera_lock.locked():
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
@@ -42,15 +52,21 @@ def photo_command(bro, update, *comm_args):
 
     bro.change_to_normal_mode()
 
-def sensor_command(bro, update, *comm_args):
+def alarm_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+
     if bro.pir_activated:
-        bro.send_message("El sensor pir se ha desactivado")
+        bro.send_message(f"{sender} ha desactivado la alarma")
         bro.pir_activated = False
     else:
-        bro.send_message("El sensor pir se ha activado")
+        bro.send_message(f"{sender} ha activado la alarma")
         bro.pir_activated = True
 
 def video_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+
+    bro.send_message(f"{sender} ha iniciado una grabación")
+
     duration = DEFAULT_VIDEO_DURATION
     if comm_args:
         try:

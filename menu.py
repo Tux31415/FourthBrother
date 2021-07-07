@@ -20,8 +20,6 @@ import bro_handlers
 
 MESSAGE = "Elige una de las siguientes opciones"
 
-PIR_ACTIVATION, PHOTO, LAMP, MOVEMENT, VIDEO = range(5)
-
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
             [InlineKeyboardButton(btn_msg, callback_data=str(data))
@@ -31,14 +29,14 @@ def _generate_keyboard_markup(keyboard):
     return InlineKeyboardMarkup(inline_keyboard)
 
 def generate_menu_keyboard(bro):
-    pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
+    pir_option_msg = "Desactivar alarma" if bro.pir_activated else "Activar alarma"
     lamp_option_msg = "Encender lámpara" if bro.is_normal_mode else "Apagar lámpara"
     movement_option_msg = "Desactivar movimiento" if bro.movement_activated else "Activar movimiento"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, PIR_ACTIVATION), (lamp_option_msg, LAMP)],
-        [("Hacer Foto", PHOTO), (movement_option_msg, MOVEMENT)],
-        [("Hacer Video", VIDEO)]
+        [(pir_option_msg, bro_handlers.ALARM), (lamp_option_msg, bro_handlers.LAMP)],
+        [("Hacer Foto", bro_handlers.PHOTO), (movement_option_msg, bro_handlers.MOVEMENT)],
+        [("Hacer Video", bro_handlers.VIDEO)]
     ])
 
     return reply_markup
