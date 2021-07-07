@@ -144,21 +144,23 @@ class FourthBrother:
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
 
         with self.__switching_mode_lock:
-            self.relay_manual.off()
-            # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(DELAY_RELAYS)
-            self.relay_normal.off()
-            self.is_normal_mode = True
+            if not self.is_normal_mode:
+                self.relay_manual.off()
+                # leave enough time for the relay to switch state. We don't want a shortcircuit
+                time.sleep(DELAY_RELAYS)
+                self.relay_normal.off()
+                self.is_normal_mode = True
 
     def change_to_manual_mode(self):
         """ Switches the relays in such a way that the lamp activate when the relay is on """
 
         with self.__switching_mode_lock:
-            self.relay_normal.on()
-            # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(DELAY_RELAYS)
-            self.relay_manual.on()
-            self.is_normal_mode = False
+            if self.is_normal_mode:
+                self.relay_normal.on()
+                # leave enough time for the relay to switch state. We don't want a shortcircuit
+                time.sleep(DELAY_RELAYS)
+                self.relay_manual.on()
+                self.is_normal_mode = False
 
     def get_image_stream(self):
         """ Takes a photo and returns a bytes object representing the image """
@@ -268,6 +270,7 @@ def main():
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
     bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
     bro.add_menu_callback_query(menu.PHOTO, menu.photo_callback_query)
+    bro.add_menu_callback_query(menu.VIDEO, menu.video_callback_query)
 
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 

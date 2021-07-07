@@ -20,7 +20,7 @@ import bro_handlers
 
 MESSAGE = "Elige una de las siguientes opciones"
 
-PIR_ACTIVATION, PHOTO, LAMP, MOVEMENT = range(4)
+PIR_ACTIVATION, PHOTO, LAMP, MOVEMENT, VIDEO = range(5)
 
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
@@ -38,6 +38,7 @@ def generate_menu_keyboard(bro):
     reply_markup = _generate_keyboard_markup([
         [(pir_option_msg, PIR_ACTIVATION), (lamp_option_msg, LAMP)],
         [("Hacer Foto", PHOTO), (movement_option_msg, MOVEMENT)],
+        [("Hacer Video", VIDEO)]
     ])
 
     return reply_markup
@@ -45,14 +46,21 @@ def generate_menu_keyboard(bro):
 def start_menu_command(bro, update, *comm_args):
     bro.send_menu()
 
-# TODO: think on how to avoid redundancy in code between callback queries and commands.
-# The code to be executed is very similar and in case I wanted to change part of its
-# functionalites I would have to change on both sides
+# this is like calling a command when pressing a button instead
+# of typing it to do that
 def photo_callback_query(bro, query, update):
     sender = update.effective_user.first_name
     query.edit_message_text(f"{sender} ha hecho una foto")
 
     bro_handlers.photo_command(bro, update)
+
+# In case I want to choose the duration of the video I have to type
+# the command /video <duration>. In the menu, there is now way to choose (yet?)
+def video_callback_query(bro, query, update):
+    sender = update.effective_user.first_name
+    query.edit_message_text(f"{sender} ha iniciado una grabación")
+
+    bro_handlers.video_command(bro, update)
 
 def lamp_callback_query(bro, query, update):
     pass

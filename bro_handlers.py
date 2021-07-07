@@ -70,7 +70,9 @@ def video_command(bro, update, *comm_args):
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
 
+    bro.change_to_manual_mode()
     bro.record_and_send_video(duration)
+    bro.change_to_normal_mode()
 
 def movement_handler(bro):
     if not bro.pir_activated or time.time() - bro.last_time_pir < MINIMUM_DELAY_PIR:
@@ -79,14 +81,14 @@ def movement_handler(bro):
     bro.send_message("¡¡ATENCIÓN: EL SENSOR PIR HA DETECTADO MOVIMIENTO!!")
     bro.last_time_pir = time.time()
 
-    bro.change_to_manual_mode()
-
     # if the camera is being used, wait until it is freed before sending message informing about the sitation
     # I do it in this way because, if the camera is being used, it is very likely it catches the source which
     # triggered the pir sensor
     # NOTE: the aquire() method from Lock() is the one which make the thread to sleep
     if bro.camera_lock.locked():
         bro.send_message("La cámara está siendo usada. Esperando a que termine")
+
+    bro.change_to_manual_mode()
 
     bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
 
