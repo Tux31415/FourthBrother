@@ -43,36 +43,3 @@ def generate_menu_keyboard(bro):
 
 def start_menu_command(bro, update, *comm_args):
     bro.send_menu()
-
-# this is like calling a command when pressing a button instead
-# of typing it to do that
-def photo_callback_query(bro, query, update):
-    sender = update.effective_user.first_name
-    query.edit_message_text(f"{sender} ha hecho una foto")
-
-    bro_handlers.photo_command(bro, update)
-
-# In case I want to choose the duration of the video I have to type
-# the command /video <duration>. In the menu, there is now way to choose (yet?)
-def video_callback_query(bro, query, update):
-    sender = update.effective_user.first_name
-    query.edit_message_text(f"{sender} ha iniciado una grabación")
-
-    bro_handlers.video_command(bro, update)
-
-def lamp_callback_query(bro, query, update):
-    pass
-
-def movement_callback_query(bro, query, update):
-    pass
-
-def pir_activation_callback_query(bro, query, update):
-    sender = update.effective_user.first_name
-
-    if bro.pir_activated:
-        bro.pir_activated = False
-        query.edit_message_text(f"{sender} ha desactivado el sensor PIR")
-    else:
-        bro.pir_activated = True
-        query.edit_message_text(f"{sender} ha activado el sensor PIR")
-

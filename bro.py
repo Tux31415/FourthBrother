@@ -30,21 +30,17 @@ from telegram.error import NetworkError
 import bro_handlers
 import bro_utils
 import menu
+import constants
 from negative_logic_relay import NegativeLogicRelay
 
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-TOKEN = config("TOKEN")
-GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
-
 # It is important that in the .env file, in order to specify
 # the pin associated to each device calling the env variable
 # following the format: '{DEVICE_NAME}_PIN'
 DEVICES_NAMES = ["PIR_SENSOR", "RELAY_A", "RELAY_B"]
-CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
-DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
 
 def generate_pin_dict():
     """ Returns a dict where the key is the device name
@@ -63,7 +59,7 @@ class FourthBrother:
         token, 
         authorized_chat, 
         pin_dict, 
-        camera_framerate=CAMERA_FRAMERATE,
+        camera_framerate=constants.CAMERA_FRAMERATE,
         camera_resolution=(576, 288),
         rotation=0
     ):
@@ -147,10 +143,12 @@ class FourthBrother:
             if not self.is_normal_mode:
                 self.relay_manual.off()
                 # leave enough time for the relay to switch state. We don't want a shortcircuit
-                time.sleep(DELAY_RELAYS)
+                time.sleep(constants.DELAY_RELAYS)
                 self.relay_normal.off()
                 self.is_normal_mode = True
 
+    # TODO: make sure to gracefully change to manual mode when exiting in case
+    # it is not in that mode
     def change_to_manual_mode(self):
         """ Switches the relays in such a way that the lamp activate when the relay is on """
 
@@ -158,7 +156,7 @@ class FourthBrother:
             if self.is_normal_mode:
                 self.relay_normal.on()
                 # leave enough time for the relay to switch state. We don't want a shortcircuit
-                time.sleep(DELAY_RELAYS)
+                time.sleep(constants.DELAY_RELAYS)
                 self.relay_manual.on()
                 self.is_normal_mode = False
 
@@ -171,6 +169,8 @@ class FourthBrother:
             stream.seek(0)
             return stream
 
+        return None
+
     def get_video_stream(self, video_duration):
         """ Records a video and returns the byte stream """
 
@@ -181,6 +181,8 @@ class FourthBrother:
             self.camera.stop_recording()
             stream.seek(0)
             return stream
+
+        return None
 
     def send_menu(self):
         """ Sends a message with an inline keyboard representing the menu """
@@ -266,7 +268,7 @@ class FourthBrother:
 
 def main():
     pin_dict = generate_pin_dict()
-    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict,
+    bro = FourthBrother(constants.TOKEN, constants.GROUP_CHAT_ID, pin_dict,
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
@@ -285,6 +287,8 @@ def main():
 
     # TODO: polling at night is nonse. Establish
     # an interval of time when the bot does not poll? 
+
+    # TODO: think about unexpected exception and the way to handle them
 
 
 if __name__ == "__main__":

@@ -15,11 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import time
-
-# measured in seconds
-DEFAULT_VIDEO_DURATION = 8
-MAXIMUM_VIDEO_DURATION = 30
-MINIMUM_DELAY_PIR = 45
+import constants
 
 PHOTO = "foto"
 LAMP = "lamp"
@@ -67,7 +63,7 @@ def video_command(bro, update, *comm_args):
 
     bro.send_message(f"{sender} ha iniciado una grabación")
 
-    duration = DEFAULT_VIDEO_DURATION
+    duration = constants.DEFAULT_VIDEO_DURATION
     if comm_args:
         try:
             duration = int(comm_args[0])
@@ -75,7 +71,7 @@ def video_command(bro, update, *comm_args):
             bro.send_message("Por favor, introduce un número")
             return
 
-    if duration > MAXIMUM_VIDEO_DURATION:
+    if duration > constants.MAXIMUM_VIDEO_DURATION:
         bro.send_message(f"No puedes hacer grabaciones de más de {MAXIMUM_VIDEO_DURATION} segundos")
         return
     
@@ -90,8 +86,11 @@ def video_command(bro, update, *comm_args):
     bro.record_and_send_video(duration)
     bro.change_to_normal_mode()
 
+def movement_command(bro, update, *comm_args):
+    pass
+
 def movement_handler(bro):
-    if not bro.pir_activated or time.time() - bro.last_time_pir < MINIMUM_DELAY_PIR:
+    if not bro.pir_activated or time.time() - bro.last_time_pir < constants.MINIMUM_DELAY_PIR:
         return
 
     bro.send_message("¡¡ATENCIÓN: EL SENSOR PIR HA DETECTADO MOVIMIENTO!!")
