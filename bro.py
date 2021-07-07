@@ -30,21 +30,17 @@ from telegram.error import NetworkError
 import bro_handlers
 import bro_utils
 import menu
+import constants
 from negative_logic_relay import NegativeLogicRelay
 
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-TOKEN = config("TOKEN")
-GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
-
 # It is important that in the .env file, in order to specify
 # the pin associated to each device calling the env variable
 # following the format: '{DEVICE_NAME}_PIN'
 DEVICES_NAMES = ["PIR_SENSOR", "RELAY_A", "RELAY_B"]
-CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
-DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
 
 def generate_pin_dict():
     """ Returns a dict where the key is the device name
@@ -63,7 +59,7 @@ class FourthBrother:
         token, 
         authorized_chat, 
         pin_dict, 
-        camera_framerate=CAMERA_FRAMERATE,
+        camera_framerate=constants.CAMERA_FRAMERATE,
         camera_resolution=(576, 288),
         rotation=0
     ):
@@ -91,6 +87,10 @@ class FourthBrother:
 
         self.camera_lock = threading.Lock()
         self.pir_activated = False
+
+        # If this is true, then the lamp will be on for an specified amount of time when the pir sensor
+        # detects movement
+        self.movement_activated = False
         self.is_normal_mode = True
         self.last_time_pir = 0
 
@@ -117,7 +117,7 @@ class FourthBrother:
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
-                callback(self, update, context.args)
+                callback(self, update, *context.args)
                 if end_menu:
                     self.send_menu()
             
@@ -140,32 +140,40 @@ class FourthBrother:
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
 
         with self.__switching_mode_lock:
-            self.relay_manual.off()
-            # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(DELAY_RELAYS)
-            self.relay_normal.off()
-            self.is_normal_mode = True
+            if not self.is_normal_mode:
+                self.relay_manual.off()
+                # leave enough time for the relay to switch state. We don't want a shortcircuit
+                time.sleep(constants.DELAY_RELAYS)
+                self.relay_normal.off()
+                self.is_normal_mode = True
 
+    # TODO: make sure to gracefully change to manual mode when exiting in case
+    # it is not in that mode
     def change_to_manual_mode(self):
         """ Switches the relays in such a way that the lamp activate when the relay is on """
 
         with self.__switching_mode_lock:
-            self.relay_normal.on()
-            # leave enough time for the relay to switch state. We don't want a shortcircuit
-            time.sleep(DELAY_RELAYS)
-            self.relay_manual.on()
-            self.is_normal_mode = False
+            if self.is_normal_mode:
+                self.relay_normal.on()
+                # leave enough time for the relay to switch state. We don't want a shortcircuit
+                time.sleep(constants.DELAY_RELAYS)
+                self.relay_manual.on()
+                self.is_normal_mode = False
 
     def get_image_stream(self):
         """ Takes a photo and returns a bytes object representing the image """
+
         with self.camera_lock:
             stream = BytesIO()
             self.camera.capture(stream, "png")
             stream.seek(0)
             return stream
 
+        return None
+
     def get_video_stream(self, video_duration):
         """ Records a video and returns the byte stream """
+
         with self.camera_lock:
             stream = BytesIO()
             self.camera.start_recording(stream, format="h264", quality=23)
@@ -173,6 +181,8 @@ class FourthBrother:
             self.camera.stop_recording()
             stream.seek(0)
             return stream
+
+        return None
 
     def send_menu(self):
         """ Sends a message with an inline keyboard representing the menu """
@@ -228,14 +238,21 @@ class FourthBrother:
             query = update.callback_query
             query.answer()
 
-            # the menu will become a normal message, which we don't want to delete
-            self._menu_message = None
-            callback(self, query, update)
+            callback(self, update)
             if end_menu:
                 self.send_menu()
 
         self.__dispatcher.add_handler(CallbackQueryHandler(callback_query_wrapper,
                                         pattern=f"^{callback_data}$", run_async=run_async))
+
+    def add_button_and_command(self, name, callback, *args, **kwargs):
+        """ Pressing a button is like executing a command but without typing it. This method
+            avoids redundancy when adding these kinds of callbacks
+
+            NOTE: the name of the command and the data associated to a button is the same"""
+
+        self.add_command(name, callback, *args, **kwargs)
+        self.add_menu_callback_query(name, callback, *args, **kwargs)
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -251,26 +268,28 @@ class FourthBrother:
 
 def main():
     pin_dict = generate_pin_dict()
-    bro = FourthBrother(TOKEN, GROUP_CHAT_ID, pin_dict,
+    bro = FourthBrother(constants.TOKEN, constants.GROUP_CHAT_ID, pin_dict,
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
-    bro.add_command("relay", bro_handlers.relay_command) 
-    bro.add_command("foto", bro_handlers.photo_command) 
-    bro.add_command("video", bro_handlers.video_command) 
-    bro.add_command("sensor", bro_handlers.sensor_command)
+    bro.add_button_and_command(bro_handlers.VIDEO, bro_handlers.video_command)
+    bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
+    bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
+    bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
-    bro.add_menu_callback_query(menu.PIR_ACTIVATION, menu.pir_activation_callback_query)
-    bro.add_menu_callback_query(menu.PHOTO, menu.photo_callback_query)
 
+    # add handlers associated to sensors
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
     bro.start_polling(timeout=15)
+    bro.change_to_manual_mode()
 
     # TODO: polling at night is nonse. Establish
     # an interval of time when the bot does not poll? 
+
+    # TODO: think about unexpected exception and the way to handle them
 
 
 if __name__ == "__main__":

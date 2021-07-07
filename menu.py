@@ -20,8 +20,6 @@ import bro_handlers
 
 MESSAGE = "Elige una de las siguientes opciones"
 
-MAIN_MENU, PIR_ACTIVATION, PHOTO = range(3)
-
 def _generate_keyboard_markup(keyboard):
     inline_keyboard = [
             [InlineKeyboardButton(btn_msg, callback_data=str(data))
@@ -31,31 +29,17 @@ def _generate_keyboard_markup(keyboard):
     return InlineKeyboardMarkup(inline_keyboard)
 
 def generate_menu_keyboard(bro):
-    pir_option_msg = "Desactivar PIR" if bro.pir_activated else "Activar PIR"
+    pir_option_msg = "Desactivar alarma" if bro.pir_activated else "Activar alarma"
+    lamp_option_msg = "Encender lámpara" if bro.is_normal_mode else "Apagar lámpara"
+    movement_option_msg = "Desactivar movimiento" if bro.movement_activated else "Activar movimiento"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, PIR_ACTIVATION)],
-        [("Hacer Foto", PHOTO)]
+        [(pir_option_msg, bro_handlers.ALARM), (lamp_option_msg, bro_handlers.LAMP)],
+        [("Hacer Foto", bro_handlers.PHOTO), (movement_option_msg, bro_handlers.MOVEMENT)],
+        [("Hacer Video", bro_handlers.VIDEO)]
     ])
 
     return reply_markup
 
 def start_menu_command(bro, update, *comm_args):
     bro.send_menu()
-
-def photo_callback_query(bro, query, update):
-    sender = update.effective_user.first_name
-    query.edit_message_text(f"{sender} ha hecho una foto")
-
-    bro_handlers.photo_command(bro, update)
-
-def pir_activation_callback_query(bro, query, update):
-    sender = update.effective_user.first_name
-
-    if bro.pir_activated:
-        bro.pir_activated = False
-        query.edit_message_text(f"{sender} ha desactivado el sensor PIR")
-    else:
-        bro.pir_activated = True
-        query.edit_message_text("{sender} ha activado el sensor PIR")
-

@@ -15,22 +15,28 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import time
+import constants
 
-# measured in seconds
-DEFAULT_VIDEO_DURATION = 8
-MAXIMUM_VIDEO_DURATION = 30
-MINIMUM_DELAY_PIR = 45
+PHOTO = "foto"
+LAMP = "lamp"
+MOVEMENT = "movimiento"
+VIDEO = "video"
+ALARM = "alarma"
 
+def lamp_command(bro, update, *com_args):
+    sender = update.effective_user.first_name
 
-def relay_command(bro, update, *comm_args):
     if bro.is_normal_mode:
-        bro.send_message("La lámpara puede ser controlado por el relé")
+        bro.send_message(f"{sender} ha encendido la lámpara")
         bro.change_to_manual_mode()
     else:
-        bro.send_message("La lámpara ya no puede ser controlada por el relé")
+        bro.send_message(f"{sender} ha apagado la lámpara")
         bro.change_to_normal_mode()
 
 def photo_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+    bro.send_message(f"{sender} ha hecho una foto")
+
     if bro.camera_lock.locked():
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
@@ -42,16 +48,22 @@ def photo_command(bro, update, *comm_args):
 
     bro.change_to_normal_mode()
 
-def sensor_command(bro, update, *comm_args):
+def alarm_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+
     if bro.pir_activated:
-        bro.send_message("El sensor pir se ha desactivado")
+        bro.send_message(f"{sender} ha desactivado la alarma")
         bro.pir_activated = False
     else:
-        bro.send_message("El sensor pir se ha activado")
+        bro.send_message(f"{sender} ha activado la alarma")
         bro.pir_activated = True
 
 def video_command(bro, update, *comm_args):
-    duration = DEFAULT_VIDEO_DURATION
+    sender = update.effective_user.first_name
+
+    bro.send_message(f"{sender} ha iniciado una grabación")
+
+    duration = constants.DEFAULT_VIDEO_DURATION
     if comm_args:
         try:
             duration = int(comm_args[0])
@@ -59,7 +71,7 @@ def video_command(bro, update, *comm_args):
             bro.send_message("Por favor, introduce un número")
             return
 
-    if duration > MAXIMUM_VIDEO_DURATION:
+    if duration > constants.MAXIMUM_VIDEO_DURATION:
         bro.send_message(f"No puedes hacer grabaciones de más de {MAXIMUM_VIDEO_DURATION} segundos")
         return
     
@@ -70,16 +82,19 @@ def video_command(bro, update, *comm_args):
         bro.send_message("La cámara no se encuentra disponible en estos momentos")
         return
 
+    bro.change_to_manual_mode()
     bro.record_and_send_video(duration)
+    bro.change_to_normal_mode()
+
+def movement_command(bro, update, *comm_args):
+    pass
 
 def movement_handler(bro):
-    if not bro.pir_activated or time.time() - bro.last_time_pir < MINIMUM_DELAY_PIR:
+    if not bro.pir_activated or time.time() - bro.last_time_pir < constants.MINIMUM_DELAY_PIR:
         return
 
     bro.send_message("¡¡ATENCIÓN: EL SENSOR PIR HA DETECTADO MOVIMIENTO!!")
     bro.last_time_pir = time.time()
-
-    bro.change_to_manual_mode()
 
     # if the camera is being used, wait until it is freed before sending message informing about the sitation
     # I do it in this way because, if the camera is being used, it is very likely it catches the source which
@@ -88,7 +103,9 @@ def movement_handler(bro):
     if bro.camera_lock.locked():
         bro.send_message("La cámara está siendo usada. Esperando a que termine")
 
-    bro.record_and_send_video(DEFAULT_VIDEO_DURATION)
+    bro.change_to_manual_mode()
+
+    bro.record_and_send_video(constants.DEFAULT_VIDEO_DURATION)
 
     bro.change_to_normal_mode()
     bro.send_menu()
