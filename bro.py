@@ -121,7 +121,7 @@ class FourthBrother:
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
-                callback(self, update, context.args)
+                callback(self, update, *context.args)
                 if end_menu:
                     self.send_menu()
             
