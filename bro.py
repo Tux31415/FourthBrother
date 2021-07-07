@@ -284,7 +284,7 @@ def main():
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
     bro.start_polling(timeout=15)
-    bro.change_to_manual_mode()
+    bro.change_to_normal_mode()
 
     # TODO: polling at night is nonse. Establish
     # an interval of time when the bot does not poll? 
