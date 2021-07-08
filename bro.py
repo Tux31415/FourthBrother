@@ -18,6 +18,7 @@
 
 import logging
 import threading
+import os
 import time
 from io import BytesIO
 
@@ -27,7 +28,7 @@ from picamera import PiCamera
 from decouple import config
 from telegram.ext import (Updater, CommandHandler, 
                 CallbackQueryHandler, ConversationHandler)
-from telegram.error import NetworkError
+from telegram.error import NetworkError, BadRequest
 
 import bro_handlers
 import bro_utils
@@ -76,8 +77,6 @@ class FourthBrother:
         # the process of changing mode must be atomic to avoid possible shortcircuits
         self.__switching_mode_lock = threading.Lock()
 
-        self._menu_message = None
-
         self.pir_sensor = MotionSensor(pin_dict["PIR_SENSOR"])
 
         # when this relay is on, the lamp acts as if there were no pir sensor
@@ -95,6 +94,10 @@ class FourthBrother:
         self.movement_activated = False
         self.is_normal_mode = True
         self.last_time_pir = 0
+
+        # creates the attribute self._menu_message_id
+        self._get_last_message_id()
+        self.send_menu()
 
 
     def add_handler_to_device(self, attr_device_name, **events):
@@ -129,7 +132,8 @@ class FourthBrother:
         self.__dispatcher.add_handler(CommandHandler(name, command_wrapper, run_async=run_async))
 
     def start_polling(self, timeout=10, courtesy_time=2):
-        """ Gets new updates by the long polling method
+        """ Gets new updates by the long polling method. The last thing the process does bofore
+        being killed is to gracefully change to normal mode.
         timeout: maximum time until Telegram servers return the reply for 'getUpdates' request
         courtesy_time: extra time to wait before raising a Timeout exception """
 
@@ -137,6 +141,7 @@ class FourthBrother:
 
         # waits until all threads have finished their tasks before exiting completely
         self.__updater.idle()
+        self._on_exit()
     
     def change_to_normal_mode(self):
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
@@ -189,11 +194,9 @@ class FourthBrother:
     def send_menu(self):
         """ Sends a message with an inline keyboard representing the menu """
 
-        if self._menu_message:
-            self._menu_message.delete()
-
+        self.delete_menu()
         reply_markup = menu.generate_menu_keyboard(self)
-        self._menu_message = self.send_message(menu.MESSAGE, reply_markup=reply_markup)
+        self._menu_message_id = self.send_message(menu.MESSAGE, reply_markup=reply_markup).message_id
 
     def record_and_send_video(self, duration, inform=True):
         """ Records and sends a video with the specified duration. 
@@ -224,6 +227,21 @@ class FourthBrother:
         """ Sends a video (stream of bytes) to the chat which is authorized to talk to """
 
         return self.__updater.bot.send_video(self.__authorized_chat, video, *args, **kwargs)
+
+    def delete_message_by_id(self, message_id, *args, **kwargs):
+        """ Deletes a message given it id. If the operation succeeded, return true"""
+
+        return self.__updater.bot.delete_message(self.__authorized_chat, message_id, *args, **kwargs)
+
+    def delete_menu(self):
+        """ Deletes the menu message using its id"""
+
+        if self._menu_message_id:
+            try:
+                self.delete_message_by_id(self._menu_message_id)
+            except BadRequest:
+                # the message whose message_id we are trying to delete does not exist
+                pass
 
     def add_menu_callback_query(self, callback_data, callback, end_menu=True, run_async=True):
         """ Adds a callback query triggered when a button from an inline keyboard is pressed
@@ -256,6 +274,33 @@ class FourthBrother:
         self.add_command(name, callback, *args, **kwargs)
         self.add_menu_callback_query(name, callback, *args, **kwargs)
 
+    def _on_exit(self):
+        """ Things to do after polling have stopped and worker threads have finished.
+            NOTE: signal handlers are executed in the main thread so in case this method
+            is called after Upater.idle(), it will be called after all threads have finished """
+
+        self.change_to_normal_mode()
+        self._save_last_message_id()
+
+    def _save_last_message_id(self):
+        """ Saves in 'constants.MENU_MESSAGE_ID_PATH' the id of the last menu message sent
+            so that we can use it when the bot is started again """
+
+        with open(constants.MENU_MESSAGE_ID_PATH, "w") as message_id_file:
+            message_id_file.write(str(self._menu_message_id))
+
+    def _get_last_message_id(self):
+        """ Retrieves the id of the last menu message sent before shutting down the bot """
+
+        if os.path.isfile(constants.MENU_MESSAGE_ID_PATH):
+            with open(constants.MENU_MESSAGE_ID_PATH) as message_id_file:
+                data = message_id_file.read()
+
+            # TODO: a dumb user may have modified this file. Handle that situation
+            self._menu_message_id =  int(data)
+        else:
+            self._menu_message_id = None
+
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
 
@@ -286,7 +331,6 @@ def main():
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
     bro.start_polling(timeout=15)
-    bro.change_to_normal_mode()
 
     # TODO: polling at night is nonse. Establish
     # an interval of time when the bot does not poll? 
