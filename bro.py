@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # FourthBrother allows to use Telegram Bot API to control your Raspberry Pi
 # Copyright (C) 2021 Pablo del Hoyo Abad <pablodelhoyo1314@gmail.com>
 #
