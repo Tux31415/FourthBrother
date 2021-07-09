@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
+
 import time
 import constants
 
@@ -22,6 +24,7 @@ LAMP = "lamp"
 MOVEMENT = "movimiento"
 VIDEO = "video"
 ALARM = "alarma"
+REBOOT = "reiniciar"
 
 def lamp_command(bro, update, *com_args):
     sender = update.effective_user.first_name
@@ -85,6 +88,26 @@ def video_command(bro, update, *comm_args):
     bro.change_to_manual_mode()
     bro.record_and_send_video(duration)
     bro.change_to_normal_mode()
+
+# in order for this to work, the bot has to be executed as a root user
+def reboot_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+
+    # the uid of the administrator is almost always 0.
+    # TODO: find a more portable way to check it in case a OS for the raspberry does
+    # not follow that convention
+
+    if os.getuid() != 0:
+        bro.send_message(f"{sender} ha intentado reiniciar el bot pero este último no dispone"
+                            " de permisos de superusuario")
+        return
+
+
+    bro.send_message(f"{sender} ha reiniciado el bot. Los comandos que se manden serán"
+                        "ignorados hasta que el bot esté listo de nuevo")
+
+    self.reason_for_exiting = constants.REASON_REBOOT
+    self.exiting_event.set()
 
 def movement_command(bro, update, *comm_args):
     pass

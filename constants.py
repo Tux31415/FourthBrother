@@ -31,3 +31,7 @@ DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
 DEFAULT_VIDEO_DURATION = 8
 MAXIMUM_VIDEO_DURATION = 30
 MINIMUM_DELAY_PIR = 45
+
+# reasons for quitting the program
+REASON_SHUTDOWN = 1
+REASON_REBOOT = 2

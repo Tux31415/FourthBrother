@@ -20,9 +20,10 @@ import logging
 import threading
 import os
 import time
+from signal import signal, SIGINT, SIGTERM, SIGABRT
 from io import BytesIO
 
-from gpiozero import LED, MotionSensor
+from gpiozero import MotionSensor
 from picamera import PiCamera
 
 from decouple import config
@@ -66,6 +67,17 @@ class FourthBrother:
         camera_resolution=(576, 288),
         rotation=0
     ):
+        # this event must be set everytime we want to exist
+        self.exiting_event = threading.Event()
+
+        # if True, the reason why the bot is stopping is because it has received
+        # a signal (like SIGINT)
+        self.finished_from_signal = False
+
+        # the value is either 'REASON_REBOOT' or 'REASON_SHUTDOWN'
+        # (or None if we quit because of a signal)
+        self.reason_for_finishing = None
+
         # telegram api stuff
         self.__updater = Updater(token)
         self.__dispatcher = self.__updater.dispatcher
@@ -131,17 +143,27 @@ class FourthBrother:
 
         self.__dispatcher.add_handler(CommandHandler(name, command_wrapper, run_async=run_async))
 
-    def start_polling(self, timeout=10, courtesy_time=2):
+    def start(self, timeout=10, courtesy_time=2):
         """ Gets new updates by the long polling method. The last thing the process does bofore
         being killed is to gracefully change to normal mode.
         timeout: maximum time until Telegram servers return the reply for 'getUpdates' request
         courtesy_time: extra time to wait before raising a Timeout exception """
 
+        self._register_signal_handler()
+
         self.__updater.start_polling(timeout=timeout, read_latency=courtesy_time)
 
-        # waits until all threads have finished their tasks before exiting completely
-        self.__updater.idle()
-        self._on_exit()
+        self.exiting_event.wait()
+        if not self.finished_from_signal:
+            self._on_exit()
+
+            if self.reason_for_exiting == constants.REASON_REBOOT:
+                print("Me han mandado reiniciarme")
+            elif self.reason_for_exiting == constants.REASON_SHUTDOWN:
+                print("Me han mandado apagarme")
+            else:
+                print("Razón desconocida")
+
     
     def change_to_normal_mode(self):
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
@@ -279,6 +301,7 @@ class FourthBrother:
             NOTE: signal handlers are executed in the main thread so in case this method
             is called after Upater.idle(), it will be called after all threads have finished """
 
+        self.__updater.stop()
         self.change_to_normal_mode()
         self._save_last_message_id()
 
@@ -300,6 +323,21 @@ class FourthBrother:
             self._menu_message_id =  int(data)
         else:
             self._menu_message_id = None
+
+    def _signal_handler(self, sig, frame):
+        if not self.exiting_event.is_set():
+            self._on_exit()
+            self.finished_from_signal = True
+            self.exiting_event.set()
+
+    def _register_signal_handler(self, signals=(SIGINT, SIGTERM, SIGABRT)):
+        """ Registers signal handler for specified signals
+
+        Inspired by:
+            https://github.com/python-telegram-bot/python-telegram-bot/blob/master/telegram/ext/updater.py#L875 """
+
+        for sig in signals:
+            signal(sig, self._signal_handler)
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -323,6 +361,7 @@ def main():
     bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
     bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
     bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
+    bro.add_button_and_command(bro_handlers.REBOOT, bro_handlers.reboot_command, end_menu=False)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
@@ -330,7 +369,7 @@ def main():
     # add handlers associated to sensors
     bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
 
-    bro.start_polling(timeout=15)
+    bro.start(timeout=15)
 
     # TODO: polling at night is nonse. Establish
     # an interval of time when the bot does not poll? 
@@ -340,3 +379,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
