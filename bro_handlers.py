@@ -106,8 +106,10 @@ def reboot_command(bro, update, *comm_args):
     bro.send_message(f"{sender} ha reiniciado el bot. Los comandos que se manden serán"
                         "ignorados hasta que el bot esté listo de nuevo")
 
-    self.reason_for_exiting = constants.REASON_REBOOT
-    self.exiting_event.set()
+    bro.reason_for_exiting = constants.REASON_REBOOT
+    # do not ease the way to send commands when the bot is not ready
+    bro.delete_menu()
+    bro.exiting_event.set()
 
 def movement_command(bro, update, *comm_args):
     pass
