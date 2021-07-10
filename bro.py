@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # FourthBrother allows to use Telegram Bot API to control your Raspberry Pi
 # Copyright (C) 2021 Pablo del Hoyo Abad <pablodelhoyo1314@gmail.com>
 #
@@ -107,8 +105,8 @@ class FourthBrother:
         self.is_normal_mode = True
         self.last_time_pir = 0
 
-        # creates the attribute self._menu_message_id
-        self._get_last_message_id()
+        # Last message representing the menu
+        self._menu_message = None
         self.send_menu()
 
 
@@ -218,7 +216,7 @@ class FourthBrother:
 
         self.delete_menu()
         reply_markup = menu.generate_menu_keyboard(self)
-        self._menu_message_id = self.send_message(menu.MESSAGE, reply_markup=reply_markup).message_id
+        self._menu_message = self.send_message(menu.MESSAGE, reply_markup=reply_markup)
 
     def record_and_send_video(self, duration, inform=True):
         """ Records and sends a video with the specified duration. 
@@ -256,14 +254,10 @@ class FourthBrother:
         return self.__updater.bot.delete_message(self.__authorized_chat, message_id, *args, **kwargs)
 
     def delete_menu(self):
-        """ Deletes the menu message using its id"""
+        """ Deletes the menu message """
 
-        if self._menu_message_id:
-            try:
-                self.delete_message_by_id(self._menu_message_id)
-            except BadRequest:
-                # the message whose message_id we are trying to delete does not exist
-                pass
+        if self._menu_message:
+            self._menu_message.delete()
 
     def add_menu_callback_query(self, callback_data, callback, end_menu=True, run_async=True):
         """ Adds a callback query triggered when a button from an inline keyboard is pressed
@@ -301,28 +295,9 @@ class FourthBrother:
             NOTE: signal handlers are executed in the main thread so in case this method
             is called after Upater.idle(), it will be called after all threads have finished """
 
+        self.delete_menu()
         self.__updater.stop()
         self.change_to_normal_mode()
-        self._save_last_message_id()
-
-    def _save_last_message_id(self):
-        """ Saves in 'constants.MENU_MESSAGE_ID_PATH' the id of the last menu message sent
-            so that we can use it when the bot is started again """
-
-        with open(constants.MENU_MESSAGE_ID_PATH, "w") as message_id_file:
-            message_id_file.write(str(self._menu_message_id))
-
-    def _get_last_message_id(self):
-        """ Retrieves the id of the last menu message sent before shutting down the bot """
-
-        if os.path.isfile(constants.MENU_MESSAGE_ID_PATH):
-            with open(constants.MENU_MESSAGE_ID_PATH) as message_id_file:
-                data = message_id_file.read()
-
-            # TODO: a dumb user may have modified this file. Handle that situation
-            self._menu_message_id =  int(data)
-        else:
-            self._menu_message_id = None
 
     def _signal_handler(self, sig, frame):
         if not self.exiting_event.is_set():

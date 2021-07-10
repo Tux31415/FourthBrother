@@ -17,10 +17,6 @@
 import os
 from decouple import config
 
-# NOTE: this works well if the program is being executed as a normal user
-# (non-root). Otherwise, this will return the home directory of root
-MENU_MESSAGE_ID_PATH = os.path.expanduser("~/.fourth-bro-menu-id.txt")
-
 TOKEN = config("TOKEN")
 GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 
