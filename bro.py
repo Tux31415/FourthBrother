@@ -18,6 +18,7 @@ import logging
 import threading
 import os
 import time
+import subprocess
 from signal import signal, SIGINT, SIGTERM, SIGABRT
 from io import BytesIO
 
@@ -156,11 +157,12 @@ class FourthBrother:
             self._on_exit()
 
             if self.reason_for_exiting == constants.REASON_REBOOT:
-                print("Me han mandado reiniciarme")
+                subprocess.run(["/usr/sbin/reboot"])
             elif self.reason_for_exiting == constants.REASON_SHUTDOWN:
-                print("Me han mandado apagarme")
+                subprocess.run(["/usr/sbin/shutdown", "now"])
             else:
-                print("Razón desconocida")
+                # TODO: log this in a proper manner
+                print("Unknown reason for shutting down")
 
     
     def change_to_normal_mode(self):
@@ -257,7 +259,11 @@ class FourthBrother:
         """ Deletes the menu message """
 
         if self._menu_message:
-            self._menu_message.delete()
+            try:
+                self._menu_message.delete()
+            except BadRequest:
+                # don't bother me telling the message does not exist
+                pass
 
     def add_menu_callback_query(self, callback_data, callback, end_menu=True, run_async=True):
         """ Adds a callback query triggered when a button from an inline keyboard is pressed
@@ -336,7 +342,9 @@ def main():
     bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
     bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
     bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
-    bro.add_button_and_command(bro_handlers.REBOOT, bro_handlers.reboot_command, end_menu=False)
+
+    bro.add_command(bro_handlers.REBOOT, bro_handlers.reboot_command, end_menu=False)
+    bro.add_command(bro_handlers.SHUTDOWN, bro_handlers.shutdown_command, end_menu=False)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)

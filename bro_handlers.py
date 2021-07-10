@@ -25,6 +25,30 @@ MOVEMENT = "movimiento"
 VIDEO = "video"
 ALARM = "alarma"
 REBOOT = "reiniciar"
+SHUTDOWN = "apagar"
+
+# NOTE: is this the best solution?
+def _exiting_commands(bro, sender, reason):
+    """ The way to proced a shutting down or reboot command is received is very similar.
+        This functin avoids that redundancy. """
+
+    # the uid of the administrator is almost always 0.
+    # TODO: find a more portable way to check it in case a OS for the raspberry does
+    # not follow that convention
+
+    verbs = ["reiniciar", "reiniciado"]
+    if reason == constants.REASON_SHUTDOWN:
+        verbs = ["apagar", "apagado"]
+
+    if os.getuid() != 0:
+        bro.send_message(f"{sender} ha intentado {verbs[0]} el bot pero este último no dispone"
+                            " de permisos de superusuario")
+    else:
+        bro.send_message(f"{sender} ha {verbs[1]} el bot. Los comandos que se manden serán"
+                        " ignorados hasta que el bot esté listo de nuevo")
+
+        bro.reason_for_exiting = reason
+        bro.exiting_event.set()
 
 def lamp_command(bro, update, *com_args):
     sender = update.effective_user.first_name
@@ -92,24 +116,11 @@ def video_command(bro, update, *comm_args):
 # in order for this to work, the bot has to be executed as a root user
 def reboot_command(bro, update, *comm_args):
     sender = update.effective_user.first_name
+    _exiting_commands(bro, sender, constants.REASON_REBOOT)
 
-    # the uid of the administrator is almost always 0.
-    # TODO: find a more portable way to check it in case a OS for the raspberry does
-    # not follow that convention
-
-    if os.getuid() != 0:
-        bro.send_message(f"{sender} ha intentado reiniciar el bot pero este último no dispone"
-                            " de permisos de superusuario")
-        return
-
-
-    bro.send_message(f"{sender} ha reiniciado el bot. Los comandos que se manden serán"
-                        "ignorados hasta que el bot esté listo de nuevo")
-
-    bro.reason_for_exiting = constants.REASON_REBOOT
-    # do not ease the way to send commands when the bot is not ready
-    bro.delete_menu()
-    bro.exiting_event.set()
+def shutdown_command(bro, update, *comm_args):
+    sender = update.effective_user.first_name
+    _exiting_commands(bro, sender, constants.REASON_SHUTDOWN)
 
 def movement_command(bro, update, *comm_args):
     pass
