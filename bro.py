@@ -79,17 +79,25 @@ class MovementThread(threading.Thread):
             if self._finished.is_set():
                 break
             self.bro.change_to_manual_mode()
+
+            # since the state of the lamp has changed, the menu also does is
+            self.bro.send_menu()
             self.movement_event.clear()
 
             # if we detect movement but the lamp is still on, wait another 'on_time' seconds
-            # before switching it off
+            # before switching it off, but only if we are not exiting
             while self.movement_event.wait(self.lamp_on_time):
                 if not self._finished.is_set():
                     self.movement_event.clear()
                 else:
+                    print("-------------------------breAK")
                     break
 
             self.bro.change_to_normal_mode()
+            # again, update the menu but if it is appropiate
+            print(f"------------------------------{self._finished.is_set()}")
+            if not self.bro.is_executing_callback.is_set() and not self._finished.is_set():
+                self.bro.send_menu()
 
     def stop(self):
         self._finished.set()
@@ -148,6 +156,8 @@ class FourthBrother:
 
         self.movement_thread = MovementThread(self, self.movement_event, lamp_on_time)
 
+        # again, Event() guarantees that there will never be problems
+        self.is_executing_callback = threading.Event()
         self.is_normal_mode = True
         self.last_time_pir = 0
 
@@ -178,9 +188,11 @@ class FourthBrother:
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
+                self.is_executing_callback.set()
                 callback(self, update, *context.args)
                 if end_menu:
                     self.send_menu()
+                self.is_executing_callback.clear()
             
             # TODO: else, register somewhere that someone has tried to
             # talk to FourthBrother from an unauthorized chat
@@ -347,10 +359,11 @@ class FourthBrother:
             is called after Upater.idle(), it will be called after all threads have finished """
 
         self.delete_menu()
-        self.__updater.stop()
 
         self.movement_thread.stop()
         self.movement_thread.join()
+
+        self.__updater.stop()
 
         self.change_to_normal_mode()
 
