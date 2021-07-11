@@ -22,6 +22,7 @@ GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 
 CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
 DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
+LAMP_ON_TIME = config("LAMP_ON_TIM", default=10, cast=int)
 
 # measured in seconds
 DEFAULT_VIDEO_DURATION = 8

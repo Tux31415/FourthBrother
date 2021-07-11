@@ -30,7 +30,7 @@ from telegram.ext import (Updater, CommandHandler,
                 CallbackQueryHandler, ConversationHandler)
 from telegram.error import NetworkError, BadRequest
 
-import command_handlers
+import handlers
 import helper
 import menu
 import constants
@@ -54,6 +54,44 @@ def generate_pin_dict():
 
     return pins
 
+class MovementThread(threading.Thread):
+    """ This thread is in charge of switching on or off the lamp
+        depending on the state of several flags """
+
+    def __init__(self, bro, movement_event, lamp_on_time, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.bro = bro
+        self.movement_event = movement_event
+        # minimum time the lamp will be on
+        self.lamp_on_time = lamp_on_time
+
+        # ensure atomicity (https://stackoverflow.com/questions/43879149/stop-a-thread-flag-vs-event)
+        self._finished = threading.Event()
+        self.start()
+
+
+    def run(self):
+        while True:
+            # blocks until the internal flag of the event is set when movement
+            # is detected
+            self.movement_event.wait()
+            if self._finished.is_set():
+                break
+            self.bro.change_to_manual_mode()
+            self.movement_event.clear()
+
+            # if we detect movement but the lamp is still on, wait another 'on_time' seconds
+            # before switching it off
+            while self.movement_event.wait(self.lamp_on_time):
+                if not self._finished.is_set():
+                    self.movement_event.clear()
+
+            self.bro.change_to_normal_mode()
+
+    def stop(self):
+        self._finished.set()
+        self.movement_event.set()
 
 class FourthBrother:
 
@@ -64,7 +102,8 @@ class FourthBrother:
         pin_dict, 
         camera_framerate=constants.CAMERA_FRAMERATE,
         camera_resolution=(576, 288),
-        rotation=0
+        rotation=0,
+        lamp_on_time=constants.LAMP_ON_TIME
     ):
         # this event must be set everytime we want to exist
         self.exiting_event = threading.Event()
@@ -103,6 +142,10 @@ class FourthBrother:
         # If this is true, then the lamp will be on for an specified amount of time when the pir sensor
         # detects movement
         self.movement_activated = False
+        self.movement_event = threading.Event()
+
+        self.movement_thread = MovementThread(self, self.movement_event, lamp_on_time)
+
         self.is_normal_mode = True
         self.last_time_pir = 0
 
@@ -303,6 +346,11 @@ class FourthBrother:
 
         self.delete_menu()
         self.__updater.stop()
+        self.movement_thread.stop()
+
+        # FIXME: 'join' will return when 'lamp_on_time' has passed or it detects.
+        # We want to exit the thread ASAPI
+        self.movement_thread.join()
         self.change_to_normal_mode()
 
     def _signal_handler(self, sig, frame):
@@ -338,23 +386,24 @@ def main():
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
-    bro.add_button_and_command(command_handlers.VIDEO, command_handlers.video_command)
-    bro.add_button_and_command(command_handlers.PHOTO, command_handlers.photo_command)
-    bro.add_button_and_command(command_handlers.ALARM, command_handlers.alarm_command)
-    bro.add_button_and_command(command_handlers.LAMP, command_handlers.lamp_command)
+    bro.add_button_and_command(handlers.VIDEO, handlers.video_command)
+    bro.add_button_and_command(handlers.PHOTO, handlers.photo_command)
+    bro.add_button_and_command(handlers.ALARM, handlers.alarm_command)
+    bro.add_button_and_command(handlers.LAMP, handlers.lamp_command)
+    bro.add_button_and_command(handlers.MOVEMENT, handlers.movement_command)
 
-    bro.add_command(command_handlers.REBOOT, command_handlers.reboot_command, end_menu=False)
-    bro.add_command(command_handlers.SHUTDOWN, command_handlers.shutdown_command, end_menu=False)
+    bro.add_command(handlers.REBOOT, handlers.reboot_command, end_menu=False)
+    bro.add_command(handlers.SHUTDOWN, handlers.shutdown_command, end_menu=False)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
 
     # add handlers associated to sensors
-    bro.add_handler_to_device("pir_sensor", when_activated=command_handlers.movement_handler)
+    bro.add_handler_to_device("pir_sensor", when_activated=handlers.movement_handler)
 
     bro.start(timeout=15)
 
-    # TODO: polling at night is nonse. Establish
+    # TODO: polling at night is nonsense. Establish
     # an interval of time when the bot does not poll? 
 
     # TODO: think about unexpected exception and the way to handle them

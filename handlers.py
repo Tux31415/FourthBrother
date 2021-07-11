@@ -26,6 +26,7 @@ VIDEO = "video"
 ALARM = "alarma"
 REBOOT = "reiniciar"
 SHUTDOWN = "apagar"
+MOVEMENT = "movimiento"
 
 # NOTE: is this the best solution?
 def _exiting_commands(bro, sender, reason):
@@ -123,9 +124,19 @@ def shutdown_command(bro, update, *comm_args):
     _exiting_commands(bro, sender, constants.REASON_SHUTDOWN)
 
 def movement_command(bro, update, *comm_args):
-    pass
+    sender = update.effective_user.first_name
+
+    if bro.movement_activated:
+        bro.send_message(f"{sender} ha desactivado el movimiento")
+        bro.movement_activated = False
+    else:
+        bro.send_message(f"{sender} ha activado el movimiento")
+        bro.movement_activated = True
 
 def movement_handler(bro):
+    if bro.movement_activated:
+        bro.movement_event.set()
+
     if not bro.pir_activated or time.time() - bro.last_time_pir < constants.MINIMUM_DELAY_PIR:
         return
 
