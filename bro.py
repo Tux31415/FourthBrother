@@ -86,6 +86,8 @@ class MovementThread(threading.Thread):
             while self.movement_event.wait(self.lamp_on_time):
                 if not self._finished.is_set():
                     self.movement_event.clear()
+                else:
+                    break
 
             self.bro.change_to_normal_mode()
 
@@ -346,11 +348,10 @@ class FourthBrother:
 
         self.delete_menu()
         self.__updater.stop()
-        self.movement_thread.stop()
 
-        # FIXME: 'join' will return when 'lamp_on_time' has passed or it detects.
-        # We want to exit the thread ASAPI
+        self.movement_thread.stop()
         self.movement_thread.join()
+
         self.change_to_normal_mode()
 
     def _signal_handler(self, sig, frame):
