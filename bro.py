@@ -30,8 +30,8 @@ from telegram.ext import (Updater, CommandHandler,
                 CallbackQueryHandler, ConversationHandler)
 from telegram.error import NetworkError, BadRequest
 
-import bro_handlers
-import bro_utils
+import command_handlers
+import helper
 import menu
 import constants
 from negative_logic_relay import NegativeLogicRelay
@@ -232,7 +232,7 @@ class FourthBrother:
             if inform:
                 self.send_message("Se ha terminado la grabación. Iniciando procesamiento")
             
-            with bro_utils.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
+            with helper.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
                 self._retry_network_error(self.send_video, mp4_stream)
 
     def send_message(self, message, *args, **kwargs):
@@ -338,19 +338,19 @@ def main():
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
-    bro.add_button_and_command(bro_handlers.VIDEO, bro_handlers.video_command)
-    bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
-    bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
-    bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
+    bro.add_button_and_command(command_handlers.VIDEO, command_handlers.video_command)
+    bro.add_button_and_command(command_handlers.PHOTO, command_handlers.photo_command)
+    bro.add_button_and_command(command_handlers.ALARM, command_handlers.alarm_command)
+    bro.add_button_and_command(command_handlers.LAMP, command_handlers.lamp_command)
 
-    bro.add_command(bro_handlers.REBOOT, bro_handlers.reboot_command, end_menu=False)
-    bro.add_command(bro_handlers.SHUTDOWN, bro_handlers.shutdown_command, end_menu=False)
+    bro.add_command(command_handlers.REBOOT, command_handlers.reboot_command, end_menu=False)
+    bro.add_command(command_handlers.SHUTDOWN, command_handlers.shutdown_command, end_menu=False)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
 
     # add handlers associated to sensors
-    bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
+    bro.add_handler_to_device("pir_sensor", when_activated=command_handlers.movement_handler)
 
     bro.start(timeout=15)
 
