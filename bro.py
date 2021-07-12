@@ -90,18 +90,17 @@ class MovementThread(threading.Thread):
                 if not self._finished.is_set():
                     self.movement_event.clear()
                 else:
-                    print("-------------------------breAK")
                     break
 
             self.bro.change_to_normal_mode()
             # again, update the menu but if it is appropiate
-            print(f"------------------------------{self._finished.is_set()}")
             if not self.bro.is_executing_callback.is_set() and not self._finished.is_set():
                 self.bro.send_menu()
 
     def stop(self):
         self._finished.set()
         self.movement_event.set()
+        self.join()
 
 class FourthBrother:
 
@@ -158,6 +157,8 @@ class FourthBrother:
 
         # again, Event() guarantees that there will never be problems
         self.is_executing_callback = threading.Event()
+        self.switch_on_from_button = threading.Event()
+
         self.is_normal_mode = True
         self.last_time_pir = 0
 
@@ -360,8 +361,8 @@ class FourthBrother:
 
         self.delete_menu()
 
+        # NOTE: stop() calls join()
         self.movement_thread.stop()
-        self.movement_thread.join()
 
         self.__updater.stop()
 

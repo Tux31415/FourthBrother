@@ -55,9 +55,11 @@ def lamp_command(bro, update, *com_args):
     sender = update.effective_user.first_name
 
     if bro.is_normal_mode:
+        bro.switch_on_from_button.set()
         bro.send_message(f"{sender} ha encendido la lámpara")
         bro.change_to_manual_mode()
     else:
+        bro.switch_on_from_button.clear()
         bro.send_message(f"{sender} ha apagado la lámpara")
         bro.change_to_normal_mode()
 
@@ -134,7 +136,7 @@ def movement_command(bro, update, *comm_args):
         bro.movement_activated = True
 
 def movement_handler(bro):
-    if bro.movement_activated:
+    if bro.movement_activated and not bro.switch_on_from_button.is_set():
         bro.movement_event.set()
 
     if not bro.pir_activated or time.time() - bro.last_time_pir < constants.MINIMUM_DELAY_PIR:
