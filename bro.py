@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # FourthBrother allows to use Telegram Bot API to control your Raspberry Pi
 # Copyright (C) 2021 Pablo del Hoyo Abad <pablodelhoyo1314@gmail.com>
 #
@@ -20,9 +18,11 @@ import logging
 import threading
 import os
 import time
+import subprocess
+from signal import signal, SIGINT, SIGTERM, SIGABRT
 from io import BytesIO
 
-from gpiozero import LED, MotionSensor
+from gpiozero import MotionSensor
 from picamera import PiCamera
 
 from decouple import config
@@ -30,8 +30,8 @@ from telegram.ext import (Updater, CommandHandler,
                 CallbackQueryHandler, ConversationHandler)
 from telegram.error import NetworkError, BadRequest
 
-import bro_handlers
-import bro_utils
+import handlers
+import helper
 import menu
 import constants
 from negative_logic_relay import NegativeLogicRelay
@@ -54,6 +54,53 @@ def generate_pin_dict():
 
     return pins
 
+class MovementThread(threading.Thread):
+    """ This thread is in charge of switching on or off the lamp
+        depending on the state of several flags """
+
+    def __init__(self, bro, movement_event, lamp_on_time, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.bro = bro
+        self.movement_event = movement_event
+        # minimum time the lamp will be on
+        self.lamp_on_time = lamp_on_time
+
+        # ensure atomicity (https://stackoverflow.com/questions/43879149/stop-a-thread-flag-vs-event)
+        self._finished = threading.Event()
+        self.start()
+
+
+    def run(self):
+        while True:
+            # blocks until the internal flag of the event is set when movement
+            # is detected
+            self.movement_event.wait()
+            if self._finished.is_set():
+                break
+            self.bro.change_to_manual_mode()
+
+            # since the state of the lamp has changed, the menu also does is
+            self.bro.send_menu()
+            self.movement_event.clear()
+
+            # if we detect movement but the lamp is still on, wait another 'on_time' seconds
+            # before switching it off, but only if we are not exiting
+            while self.movement_event.wait(self.lamp_on_time):
+                if not self._finished.is_set():
+                    self.movement_event.clear()
+                else:
+                    break
+
+            self.bro.change_to_normal_mode()
+            # again, update the menu but if it is appropiate
+            if not self.bro.is_executing_callback.is_set() and not self._finished.is_set():
+                self.bro.send_menu()
+
+    def stop(self):
+        self._finished.set()
+        self.movement_event.set()
+        self.join()
 
 class FourthBrother:
 
@@ -64,8 +111,20 @@ class FourthBrother:
         pin_dict, 
         camera_framerate=constants.CAMERA_FRAMERATE,
         camera_resolution=(576, 288),
-        rotation=0
+        rotation=0,
+        lamp_on_time=constants.LAMP_ON_TIME
     ):
+        # this event must be set everytime we want to exist
+        self.exiting_event = threading.Event()
+
+        # if True, the reason why the bot is stopping is because it has received
+        # a signal (like SIGINT)
+        self.finished_from_signal = False
+
+        # the value is either 'REASON_REBOOT' or 'REASON_SHUTDOWN'
+        # (or None if we quit because of a signal)
+        self.reason_for_finishing = None
+
         # telegram api stuff
         self.__updater = Updater(token)
         self.__dispatcher = self.__updater.dispatcher
@@ -92,11 +151,19 @@ class FourthBrother:
         # If this is true, then the lamp will be on for an specified amount of time when the pir sensor
         # detects movement
         self.movement_activated = False
+        self.movement_event = threading.Event()
+
+        self.movement_thread = MovementThread(self, self.movement_event, lamp_on_time)
+
+        # again, Event() guarantees that there will never be problems
+        self.is_executing_callback = threading.Event()
+        self.switch_on_from_button = threading.Event()
+
         self.is_normal_mode = True
         self.last_time_pir = 0
 
-        # creates the attribute self._menu_message_id
-        self._get_last_message_id()
+        # Last message representing the menu
+        self._menu_message = None
         self.send_menu()
 
 
@@ -122,26 +189,39 @@ class FourthBrother:
 
         def command_wrapper(update, context):
             if update.message.chat_id == self.__authorized_chat:
+                self.is_executing_callback.set()
                 callback(self, update, *context.args)
                 if end_menu:
                     self.send_menu()
+                self.is_executing_callback.clear()
             
             # TODO: else, register somewhere that someone has tried to
             # talk to FourthBrother from an unauthorized chat
 
         self.__dispatcher.add_handler(CommandHandler(name, command_wrapper, run_async=run_async))
 
-    def start_polling(self, timeout=10, courtesy_time=2):
+    def start(self, timeout=10, courtesy_time=2):
         """ Gets new updates by the long polling method. The last thing the process does bofore
         being killed is to gracefully change to normal mode.
         timeout: maximum time until Telegram servers return the reply for 'getUpdates' request
         courtesy_time: extra time to wait before raising a Timeout exception """
 
+        self._register_signal_handler()
+
         self.__updater.start_polling(timeout=timeout, read_latency=courtesy_time)
 
-        # waits until all threads have finished their tasks before exiting completely
-        self.__updater.idle()
-        self._on_exit()
+        self.exiting_event.wait()
+        if not self.finished_from_signal:
+            self._on_exit()
+
+            if self.reason_for_exiting == constants.REASON_REBOOT:
+                subprocess.run(["/usr/sbin/reboot"])
+            elif self.reason_for_exiting == constants.REASON_SHUTDOWN:
+                subprocess.run(["/usr/sbin/shutdown", "now"])
+            else:
+                # TODO: log this in a proper manner
+                print("Unknown reason for shutting down")
+
     
     def change_to_normal_mode(self):
         """ Switches the relays in such a way that the lamps acts as if there were no pir sensor"""
@@ -196,7 +276,7 @@ class FourthBrother:
 
         self.delete_menu()
         reply_markup = menu.generate_menu_keyboard(self)
-        self._menu_message_id = self.send_message(menu.MESSAGE, reply_markup=reply_markup).message_id
+        self._menu_message = self.send_message(menu.MESSAGE, reply_markup=reply_markup)
 
     def record_and_send_video(self, duration, inform=True):
         """ Records and sends a video with the specified duration. 
@@ -210,7 +290,7 @@ class FourthBrother:
             if inform:
                 self.send_message("Se ha terminado la grabación. Iniciando procesamiento")
             
-            with bro_utils.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
+            with helper.convert_to_mp4(video_stream.read(), self.camera.framerate) as mp4_stream:
                 self._retry_network_error(self.send_video, mp4_stream)
 
     def send_message(self, message, *args, **kwargs):
@@ -234,13 +314,13 @@ class FourthBrother:
         return self.__updater.bot.delete_message(self.__authorized_chat, message_id, *args, **kwargs)
 
     def delete_menu(self):
-        """ Deletes the menu message using its id"""
+        """ Deletes the menu message """
 
-        if self._menu_message_id:
+        if self._menu_message:
             try:
-                self.delete_message_by_id(self._menu_message_id)
+                self._menu_message.delete()
             except BadRequest:
-                # the message whose message_id we are trying to delete does not exist
+                # don't bother me telling the message does not exist
                 pass
 
     def add_menu_callback_query(self, callback_data, callback, end_menu=True, run_async=True):
@@ -279,27 +359,29 @@ class FourthBrother:
             NOTE: signal handlers are executed in the main thread so in case this method
             is called after Upater.idle(), it will be called after all threads have finished """
 
+        self.delete_menu()
+
+        # NOTE: stop() calls join()
+        self.movement_thread.stop()
+
+        self.__updater.stop()
+
         self.change_to_normal_mode()
-        self._save_last_message_id()
 
-    def _save_last_message_id(self):
-        """ Saves in 'constants.MENU_MESSAGE_ID_PATH' the id of the last menu message sent
-            so that we can use it when the bot is started again """
+    def _signal_handler(self, sig, frame):
+        if not self.exiting_event.is_set():
+            self._on_exit()
+            self.finished_from_signal = True
+            self.exiting_event.set()
 
-        with open(constants.MENU_MESSAGE_ID_PATH, "w") as message_id_file:
-            message_id_file.write(str(self._menu_message_id))
+    def _register_signal_handler(self, signals=(SIGINT, SIGTERM, SIGABRT)):
+        """ Registers signal handler for specified signals
 
-    def _get_last_message_id(self):
-        """ Retrieves the id of the last menu message sent before shutting down the bot """
+        Inspired by:
+            https://github.com/python-telegram-bot/python-telegram-bot/blob/master/telegram/ext/updater.py#L875 """
 
-        if os.path.isfile(constants.MENU_MESSAGE_ID_PATH):
-            with open(constants.MENU_MESSAGE_ID_PATH) as message_id_file:
-                data = message_id_file.read()
-
-            # TODO: a dumb user may have modified this file. Handle that situation
-            self._menu_message_id =  int(data)
-        else:
-            self._menu_message_id = None
+        for sig in signals:
+            signal(sig, self._signal_handler)
 
     def _retry_network_error(self, sending_func, stream, attempts=3, *args, **kwargs):
         """ In case of a NetworkError, retries 'attempts' times before giving up. """
@@ -319,20 +401,24 @@ def main():
                             camera_resolution=(288*2, 576*2), rotation=270)
 
     # add commands
-    bro.add_button_and_command(bro_handlers.VIDEO, bro_handlers.video_command)
-    bro.add_button_and_command(bro_handlers.PHOTO, bro_handlers.photo_command)
-    bro.add_button_and_command(bro_handlers.ALARM, bro_handlers.alarm_command)
-    bro.add_button_and_command(bro_handlers.LAMP, bro_handlers.lamp_command)
+    bro.add_button_and_command(handlers.VIDEO, handlers.video_command)
+    bro.add_button_and_command(handlers.PHOTO, handlers.photo_command)
+    bro.add_button_and_command(handlers.ALARM, handlers.alarm_command)
+    bro.add_button_and_command(handlers.LAMP, handlers.lamp_command)
+    bro.add_button_and_command(handlers.MOVEMENT, handlers.movement_command)
+
+    bro.add_command(handlers.REBOOT, handlers.reboot_command, end_menu=False)
+    bro.add_command(handlers.SHUTDOWN, handlers.shutdown_command, end_menu=False)
 
     # add menu
     bro.add_command("menu", menu.start_menu_command, end_menu=False)
 
     # add handlers associated to sensors
-    bro.add_handler_to_device("pir_sensor", when_activated=bro_handlers.movement_handler)
+    bro.add_handler_to_device("pir_sensor", when_activated=handlers.movement_handler)
 
-    bro.start_polling(timeout=15)
+    bro.start(timeout=15)
 
-    # TODO: polling at night is nonse. Establish
+    # TODO: polling at night is nonsense. Establish
     # an interval of time when the bot does not poll? 
 
     # TODO: think about unexpected exception and the way to handle them
@@ -340,3 +426,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

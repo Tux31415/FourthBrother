@@ -16,7 +16,7 @@
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-import bro_handlers
+import handlers
 
 MESSAGE = "Elige una de las siguientes opciones"
 
@@ -34,9 +34,9 @@ def generate_menu_keyboard(bro):
     movement_option_msg = "Desactivar movimiento" if bro.movement_activated else "Activar movimiento"
 
     reply_markup = _generate_keyboard_markup([
-        [(pir_option_msg, bro_handlers.ALARM), (lamp_option_msg, bro_handlers.LAMP)],
-        [("Hacer Foto", bro_handlers.PHOTO), (movement_option_msg, bro_handlers.MOVEMENT)],
-        [("Hacer Video", bro_handlers.VIDEO)]
+        [(pir_option_msg, handlers.ALARM), (lamp_option_msg, handlers.LAMP)],
+        [("Hacer Foto", handlers.PHOTO), (movement_option_msg, handlers.MOVEMENT)],
+        [("Hacer Video", handlers.VIDEO)]
     ])
 
     return reply_markup

@@ -17,17 +17,18 @@
 import os
 from decouple import config
 
-# NOTE: this works well if the program is being executed as a normal user
-# (non-root). Otherwise, this will return the home directory of root
-MENU_MESSAGE_ID_PATH = os.path.expanduser("~/.fourth-bro-menu-id.txt")
-
 TOKEN = config("TOKEN")
 GROUP_CHAT_ID = config("GROUP_CHAT_ID", cast=int)
 
 CAMERA_FRAMERATE = config("CAMERA_FRAMERATE", default=30, cast=int)
 DELAY_RELAYS = config("DELAY_RELAYS", default=0.5, cast=float)
+LAMP_ON_TIME = config("LAMP_ON_TIM", default=10, cast=int)
 
 # measured in seconds
 DEFAULT_VIDEO_DURATION = 8
 MAXIMUM_VIDEO_DURATION = 30
 MINIMUM_DELAY_PIR = 45
+
+# reasons for quitting the program
+REASON_SHUTDOWN = 1
+REASON_REBOOT = 2
